@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trân - Hà Beo Hunter</title>
+    <title>Trân skibidi - Hà Beo Hunter</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; color: white; }
         #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
         canvas { position: relative; z-index: 10; display: block; }
-        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 15px; border: 2px solid #00ffff; text-align: center; z-index: 100; min-width: 300px; box-shadow: 0 0 15px #00ffff; }
+        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 15px; border: 2px solid #00ffff; text-align: center; z-index: 100; min-width: 320px; box-shadow: 0 0 15px #00ffff; }
         .stats { display: flex; justify-content: center; gap: 8px; font-weight: bold; font-size: 13px; margin-top: 5px; }
         #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; z-index: 100; }
         #action-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; }
@@ -21,7 +21,7 @@
 
 <div id="bg"></div>
 <div id="ui">
-    <div style="color: #00ffff; font-weight: bold;">TRÂN SĂN HÀ BEO BÉO BÈO</div>
+    <div style="color: #00ffff; font-weight: bold;">TRÂN SKIBIDI VS HÀ BEO BÉO BÈO</div>
     <div class="stats">
         <div>HÀ: <span id="c1">0</span>/10 | BEO: <span id="c2">0</span>/10 | BÉO: <span id="c3">0</span>/10 | BÈO: <span id="c4">0</span>/10</div>
     </div>
@@ -116,7 +116,7 @@
 
             if(dist < 45 && now - player.lastHit > 1000) {
                 player.hp--; player.lastHit = now;
-                if(player.hp <= 0) { alert("THUA RỒI! HÀ BEO QUÁ MẠNH."); location.reload(); }
+                if(player.hp <= 0) { alert("SKIBIDI TOILET THẤT BẠI! HÀ BEO QUÁ MẠNH."); location.reload(); }
             }
 
             bullets.forEach((b, bi) => {
@@ -127,7 +127,7 @@
                         ['c1','c2','c3','c4'].forEach((id, idx) => document.getElementById(id).innerText = counts[words[idx]]);
                     }
                     enemies.splice(i, 1); bullets.splice(bi, 1);
-                    if(Object.values(counts).every(v => v >= 10)) { alert("CHÚC MỪNG TRÂN ĐÃ PHÁ ĐẢO!"); location.reload(); }
+                    if(Object.values(counts).every(v => v >= 10)) { alert("CHÚC MỪNG TRÂN SKIBIDI ĐÃ CHIẾN THẮNG!"); location.reload(); }
                 }
             });
         });
@@ -153,7 +153,7 @@
         ctx.translate(cx, cy);
         ctx.rotate(player.angle);
         ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'white'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.fillText("Trân", 0, 6);
+        ctx.fillStyle = 'white'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.fillText("Trân skibidi", 0, 4);
         ctx.fillStyle = 'white'; ctx.fillRect(30, -5, 18, 10); // Nòng súng
         ctx.restore();
 
