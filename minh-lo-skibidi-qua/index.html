@@ -3,164 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trân skibidi - Hà Beo Hunter</title>
+    <title>Trân Ngu Tank - Boss Chiến</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; color: white; }
-        #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
-        canvas { position: relative; z-index: 10; display: block; }
-        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 15px; border: 2px solid #00ffff; text-align: center; z-index: 100; min-width: 320px; box-shadow: 0 0 15px #00ffff; }
-        .stats { display: flex; justify-content: center; gap: 8px; font-weight: bold; font-size: 13px; margin-top: 5px; }
-        #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; z-index: 100; }
-        #action-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; }
-        .btn { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border: 2px solid white; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; user-select: none; }
-        #btn-shoot { width: 90px; height: 90px; background: #ff4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid white; box-shadow: 0 0 20px red; }
-        .rotate-group { display: flex; gap: 10px; }
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; touch-action: none; color: white; }
+        #menu { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 20px; }
+        .section { background: #222; padding: 15px; border-radius: 10px; margin: 10px; width: 90%; max-width: 400px; border: 1px solid #444; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .item { padding: 8px; background: #333; border: 2px solid transparent; border-radius: 5px; text-align: center; cursor: pointer; font-size: 11px; }
+        .item.selected { border-color: #0f0; background: #1a331a; }
+        #start-btn { background: #ed1c24; color: white; padding: 15px 40px; border-radius: 30px; font-weight: bold; margin-top: 20px; cursor: pointer; border: none; }
+        #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; text-align: center; width: 100%; pointer-events: none; }
+        canvas { display: none; background: #1a1a1a; }
+        .hp-bar { width: 200px; height: 10px; background: #333; margin: 5px auto; border: 1px solid white; }
+        .hp-fill { height: 100%; background: #0f0; transition: width 0.2s; }
+        #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 50px); gap: 5px; z-index: 100; display: none; }
+        #action-controls { position: fixed; bottom: 20px; right: 20px; z-index: 100; display: none; }
+        .btn { width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 1px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; user-select: none; }
     </style>
 </head>
 <body>
 
-<div id="bg"></div>
-<div id="ui">
-    <div style="color: #00ffff; font-weight: bold;">TRÂN SKIBIDI VS HÀ BEO BÉO BÈO</div>
-    <div class="stats">
-        <div>HÀ: <span id="c1">0</span>/10 | BEO: <span id="c2">0</span>/10 | BÉO: <span id="c3">0</span>/10 | BÈO: <span id="c4">0</span>/10</div>
+<div id="menu">
+    <h1>TRÂN NGU TANK</h1>
+    <div style="color: #0f0;">Xu: <span id="coin-display">1000</span></div>
+    <div class="section">
+        <h2>Màu Xe</h2>
+        <div class="grid" id="tank-colors">
+            <div class="item selected" data-color="#4a6741">Lục</div>
+            <div class="item" data-color="#0066ff">Lam</div>
+            <div class="item" data-color="#ff00ff">Hồng</div>
+        </div>
     </div>
+    <div class="section">
+        <h2>Kỹ năng (Chọn 3)</h2>
+        <div class="grid">
+            <div class="item skill" data-id="speed" data-price="10">Chạy nhanh</div>
+            <div class="item skill" data-id="wall" data-price="200">Xuyên tường</div>
+            <div class="item skill" data-id="laser" data-price="500">Laser</div>
+        </div>
+    </div>
+    <button id="start-btn">QUYẾT CHIẾN BOSS (LV <span id="lv-text">1</span>)</button>
+</div>
+
+<div id="game-ui">
+    <div>TRÂN NGU (HP)</div>
+    <div class="hp-bar"><div id="p-hp" class="hp-fill" style="width: 100%"></div></div>
+    <div style="color: red;">BOSS (HP)</div>
+    <div class="hp-bar"><div id="e-hp" class="hp-fill" style="width: 100%; background: red;"></div></div>
 </div>
 
 <div id="move-controls">
     <div></div><div class="btn" id="up">↑</div><div></div>
     <div class="btn" id="left">←</div><div class="btn" id="down">↓</div><div class="btn" id="right">→</div>
 </div>
-
 <div id="action-controls">
-    <div class="rotate-group">
-        <div class="btn" id="rot-left">⟲</div>
-        <div class="btn" id="rot-right">⟳</div>
-    </div>
-    <div id="btn-shoot">BẮN</div>
+    <div class="btn" id="btn-shoot" style="width: 80px; height: 80px; background: red; border-radius: 50%;">BẮN</div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
+    let coins = 1000, level = 1, selectedColor = "#4a6741", selectedSkills = [];
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const bg = document.getElementById('bg');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    let gameRunning = false;
 
-    let worldX = 0, worldY = 0;
-    const player = { angle: 0, speed: 5, rotSpeed: 0.08, hp: 10, lastHit: 0 };
-    const bullets = [], enemies = [], particles = [];
-    const counts = { 'HÀ': 0, 'BEO': 0, 'BÉO': 0, 'BÈO': 0 };
-    const words = ['HÀ', 'BEO', 'BÉO', 'BÈO'];
-    const keys = { up: false, down: false, left: false, right: false, rotL: false, rotR: false };
+    const player = { x: 100, y: 100, angle: 0, hp: 100, maxHp: 100, speed: 3 };
+    const boss = { x: 500, y: 300, angle: 0, hp: 100, maxHp: 100, speed: 1.5, lastShot: 0 };
+    let pBullets = [], eBullets = [];
+    const keys = { up: false, down: false, left: false, right: false };
 
-    function bind(id, key) {
+    // Xử lý Menu
+    document.querySelectorAll('#tank-colors .item').forEach(i => i.onclick = () => {
+        document.querySelector('#tank-colors .selected').classList.remove('selected');
+        i.classList.add('selected'); selectedColor = i.dataset.color;
+    });
+
+    document.querySelectorAll('.skill').forEach(i => i.onclick = () => {
+        if(selectedSkills.includes(i.dataset.id)) {
+            selectedSkills = selectedSkills.filter(s => s !== i.dataset.id); i.classList.remove('selected');
+        } else if(selectedSkills.length < 3 && coins >= i.dataset.price) {
+            coins -= i.dataset.price; document.getElementById('coin-display').innerText = coins;
+            selectedSkills.push(i.dataset.id); i.classList.add('selected');
+        }
+    });
+
+    function bind(id, k) {
         const el = document.getElementById(id);
-        const start = (e) => { e.preventDefault(); keys[key] = true; };
-        const end = (e) => { e.preventDefault(); keys[key] = false; };
-        el.addEventListener('touchstart', start);
-        el.addEventListener('touchend', end);
-        el.onmousedown = start;
-        el.onmouseup = end;
-        el.onmouseleave = end;
+        el.ontouchstart = (e) => { e.preventDefault(); keys[k] = true; };
+        el.ontouchend = () => keys[k] = false;
+        el.onmousedown = () => keys[k] = true;
+        el.onmouseup = () => keys[k] = false;
     }
+    bind('up','up'); bind('down','down'); bind('left','left'); bind('right','right');
 
-    bind('up', 'up'); bind('down', 'down'); bind('left', 'left'); bind('right', 'right');
-    bind('rot-left', 'rotL'); bind('rot-right', 'rotR');
+    document.getElementById('start-btn').onclick = () => {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('move-controls').style.display = 'grid';
+        document.getElementById('action-controls').style.display = 'block';
+        canvas.style.display = 'block';
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        boss.hp = boss.maxHp = 100 * level;
+        boss.speed = 1.5 + (level * 0.2);
+        gameRunning = true; loop();
+    };
 
-    function shoot() {
-        bullets.push({
-            x: worldX + canvas.width/2 + Math.cos(player.angle)*40,
-            y: worldY + canvas.height/2 + Math.sin(player.angle)*40,
-            vx: Math.cos(player.angle)*12,
-            vy: Math.sin(player.angle)*12
-        });
-    }
-    document.getElementById('btn-shoot').onclick = (e) => { e.preventDefault(); shoot(); };
+    document.getElementById('btn-shoot').onclick = () => {
+        pBullets.push({ x: player.x, y: player.y, vx: Math.cos(player.angle)*8, vy: Math.sin(player.angle)*8, time: Date.now() });
+    };
 
-    setInterval(() => {
-        const angle = Math.random() * Math.PI * 2;
-        enemies.push({
-            x: worldX + canvas.width/2 + Math.cos(angle)*600,
-            y: worldY + canvas.height/2 + Math.sin(angle)*600,
-            text: words[Math.floor(Math.random()*4)],
-            speed: 1.6,
-            color: `hsl(${Math.random()*360}, 100%, 75%)`
-        });
-    }, 900);
-
-    function update() {
-        if(keys.up) worldY -= player.speed;
-        if(keys.down) worldY += player.speed;
-        if(keys.left) worldX -= player.speed;
-        if(keys.right) worldX += player.speed;
-        if(keys.rotL) player.angle -= player.rotSpeed;
-        if(keys.rotR) player.angle += player.rotSpeed;
-
-        bg.style.backgroundPosition = `${-worldX}px ${-worldY}px`;
-
-        bullets.forEach((b, i) => {
-            b.x += b.vx; b.y += b.vy;
-            if(Math.abs(b.x - (worldX+canvas.width/2)) > 1000) bullets.splice(i, 1);
-        });
-
-        const now = Date.now();
-        enemies.forEach((en, i) => {
-            const dx = (worldX + canvas.width/2) - en.x;
-            const dy = (worldY + canvas.height/2) - en.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            en.x += (dx/dist)*en.speed;
-            en.y += (dy/dist)*en.speed;
-
-            if(dist < 45 && now - player.lastHit > 1000) {
-                player.hp--; player.lastHit = now;
-                if(player.hp <= 0) { alert("SKIBIDI TOILET THẤT BẠI! HÀ BEO QUÁ MẠNH."); location.reload(); }
-            }
-
-            bullets.forEach((b, bi) => {
-                if(Math.sqrt((b.x-en.x)**2 + (b.y-en.y)**2) < 35) {
-                    for(let k=0; k<12; k++) particles.push({x: en.x, y: en.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: en.color});
-                    if(counts[en.text] < 10) {
-                        counts[en.text]++;
-                        ['c1','c2','c3','c4'].forEach((id, idx) => document.getElementById(id).innerText = counts[words[idx]]);
-                    }
-                    enemies.splice(i, 1); bullets.splice(bi, 1);
-                    if(Object.values(counts).every(v => v >= 10)) { alert("CHÚC MỪNG TRÂN SKIBIDI ĐÃ CHIẾN THẮNG!"); location.reload(); }
-                }
-            });
-        });
-        particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if(p.life <= 0) particles.splice(i, 1); });
-    }
-
-    function draw() {
+    function loop() {
+        if(!gameRunning) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(-worldX, -worldY);
-        particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); });
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#ffaa00'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
-        ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
-        enemies.forEach(en => { ctx.fillStyle = en.color; ctx.fillText(en.text, en.x, en.y); });
-        ctx.restore();
 
-        const cx = canvas.width/2, cy = canvas.height/2;
-        ctx.fillStyle = '#333'; ctx.fillRect(cx - 30, cy - 60, 60, 10);
-        ctx.fillStyle = '#00ff00'; ctx.fillRect(cx - 30, cy - 60, (player.hp/10)*60, 10);
-        
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(player.angle);
-        ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'white'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.fillText("Trân skibidi", 0, 4);
-        ctx.fillStyle = 'white'; ctx.fillRect(30, -5, 18, 10); // Nòng súng
-        ctx.restore();
+        // Player di chuyển & xoay
+        if(keys.up) { player.x += Math.cos(player.angle)*player.speed; player.y += Math.sin(player.angle)*player.speed; }
+        if(keys.down) { player.x -= Math.cos(player.angle)*player.speed; player.y -= Math.sin(player.angle)*player.speed; }
+        if(keys.left) player.angle -= 0.05;
+        if(keys.right) player.angle += 0.05;
 
-        update();
-        requestAnimationFrame(draw);
+        // Boss AI: Đuổi và Bắn
+        let dx = player.x - boss.x, dy = player.y - boss.y;
+        let dist = Math.sqrt(dx*dx+dy*dy);
+        boss.angle = Math.atan2(dy, dx);
+        if(dist > 150) { boss.x += (dx/dist)*boss.speed; boss.y += (dy/dist)*boss.speed; }
+
+        if(Date.now() - boss.lastShot > 1500) {
+            eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(boss.angle)*6, vy: Math.sin(boss.angle)*6, time: Date.now() });
+            boss.lastShot = Date.now();
+        }
+
+        // Vẽ Xe Tăng
+        const drawTank = (x, y, ang, col, name) => {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+            ctx.fillStyle = col; ctx.fillRect(-20, -15, 40, 30);
+            ctx.fillStyle = "black"; ctx.fillRect(15, -3, 15, 6);
+            ctx.restore(); ctx.fillStyle = "white"; ctx.fillText(name, x-20, y-25);
+        };
+        drawTank(player.x, player.y, player.angle, selectedColor, "TRÂN NGU");
+        drawTank(boss.x, boss.y, boss.angle, "red", "BOSS");
+
+        // Xử lý đạn Player
+        pBullets.forEach((b, i) => {
+            b.x += b.vx; b.y += b.vy; ctx.fillStyle = "yellow"; ctx.fillRect(b.x, b.y, 5, 5);
+            if(Math.sqrt((b.x-boss.x)**2+(b.y-boss.y)**2) < 30) { boss.hp -= 10; pBullets.splice(i, 1); }
+            if(Date.now()-b.time > 2000) pBullets.splice(i, 1);
+        });
+
+        // Xử lý đạn Boss
+        eBullets.forEach((b, i) => {
+            b.x += b.vx; b.y += b.vy; ctx.fillStyle = "orange"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+            if(Math.sqrt((b.x-player.x)**2+(b.y-player.y)**2) < 25) { player.hp -= 15; eBullets.splice(i, 1); }
+            if(Date.now()-b.time > 2000) eBullets.splice(i, 1);
+        });
+
+        // Cập nhật UI Máu
+        document.getElementById('p-hp').style.width = (player.hp/player.maxHp*100) + "%";
+        document.getElementById('e-hp').style.width = (boss.hp/boss.maxHp*100) + "%";
+
+        if(player.hp <= 0) { alert("BẠN ĐÃ HY SINH!"); location.reload(); }
+        if(boss.hp <= 0) { alert("BOSS ĐÃ BỊ TIÊU DIỆT! +1000 XU"); coins += 1000; level++; gameRunning = false; document.getElementById('menu').style.display='flex'; document.getElementById('lv-text').innerText = level;}
+
+        requestAnimationFrame(loop);
     }
-    draw();
 </script>
 </body>
 </html>
