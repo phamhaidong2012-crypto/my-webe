@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ - Nhặt Quanh Người</title>
+    <title>Minh Lỏ - Thám Hiểm</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
-        #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
-        #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 20px; border: 2px solid lime; z-index: 200; color: white; text-align: center; min-width: 260px; box-shadow: 0 0 10px lime; }
+        #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 80px 80px; z-index: 1; }
+        #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 20px; border: 2px solid lime; z-index: 200; color: white; text-align: center; min-width: 260px; box-shadow: 0 0 15px lime; }
         .task-list { display: flex; justify-content: center; gap: 10px; font-weight: bold; margin-top: 5px; font-size: 14px; }
         #player { position: fixed; top: 50%; left: 50%; width: 70px; height: 70px; background: lime; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; transform: translate(-50%, -50%); z-index: 100; box-shadow: 0 0 30px lime; }
         #container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-        .item { position: absolute; font-weight: bold; font-size: 22px; transform: translate(-50%, -50%); z-index: 20; text-shadow: 0 0 10px white; transition: opacity 0.5s; }
+        .item { position: absolute; font-weight: bold; font-size: 22px; transform: translate(-50%, -50%); z-index: 20; text-shadow: 0 0 10px white; }
         #controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 55px); gap: 8px; z-index: 200; }
         .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.2); border: 1px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; user-select: none; }
         #btn-n { position: fixed; bottom: 30px; right: 30px; width: 90px; height: 90px; background: gold; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; z-index: 210; border: 5px solid #fff; font-size: 35px; box-shadow: 0 0 20px orange; }
@@ -23,12 +23,9 @@
 
 <div id="bg"></div>
 <div id="game-ui">
-    <div style="color: gold;">BẢN ĐỒ NHIỆM VỤ</div>
+    <div style="color: gold; letter-spacing: 1px;">MINH LỎ EXPLORER</div>
     <div class="task-list">
-        <div>M: <span id="c1">0</span>/10</div>
-        <div>L: <span id="c2">0</span>/10</div>
-        <div>S: <span id="c3">0</span>/10</div>
-        <div>Q: <span id="c4">0</span>/10</div>
+        <div>M: <span id="c1">0</span>/10 | L: <span id="c2">0</span>/10 | S: <span id="c3">0</span>/10 | Q: <span id="c4">0</span>/10</div>
     </div>
 </div>
 
@@ -55,7 +52,7 @@
         checkCollision();
     }
 
-    // SINH CHỮ CÁCH NHÂN VẬT "1 GANG TAY" (KHOẢNG 150-200px)
+    // SINH CHỮ XA GẤP 5 LẦN (1250px) - MỖI 1 GIÂY
     setInterval(() => {
         if(gameFinished) return;
         const item = document.createElement('div');
@@ -63,9 +60,9 @@
         item.innerText = words[Math.floor(Math.random() * words.length)];
         item.style.color = `hsl(${Math.random()*360}, 100%, 75%)`;
 
-        // Tính toán vị trí ngẫu nhiên xung quanh nhân vật
+        // Khoảng cách cực xa
         const angle = Math.random() * Math.PI * 2;
-        const distance = 150 + Math.random() * 50; // Khoảng cách "1 gang tay"
+        const distance = 1250; 
         const offsetX = Math.cos(angle) * distance;
         const offsetY = Math.sin(angle) * distance;
 
@@ -73,11 +70,8 @@
         item.style.top = (posY + window.innerHeight/2 + offsetY) + 'px';
         
         container.appendChild(item);
-        
-        // Nếu không nhặt, chữ sẽ tự biến mất sau 5 giây để đỡ rác
-        setTimeout(() => { if(item.parentNode) item.style.opacity = '0'; }, 4500);
-        setTimeout(() => { if(item.parentNode) item.remove(); }, 5000);
-    }, 500);
+        // Không có hàm remove() tự động -> Chữ tồn tại mãi mãi
+    }, 1000);
 
     function move(dx, dy) {
         if(gameFinished) return;
@@ -85,13 +79,14 @@
         draw();
     }
 
-    const speed = 30;
+    const speed = 40; // Tăng tốc độ chạy để đi tìm chữ xa dễ hơn
     window.onkeydown = e => {
-        if(e.key === 'w' || e.key === 'ArrowUp') move(0, -speed);
-        if(e.key === 's' || e.key === 'ArrowDown') move(0, speed);
-        if(e.key === 'a' || e.key === 'ArrowLeft') move(-speed, 0);
-        if(e.key === 'd' || e.key === 'ArrowRight') move(speed, 0);
-        if(e.key.toLowerCase() === 'n') handleN();
+        const k = e.key.toLowerCase();
+        if(k === 'w' || e.key === 'ArrowUp') move(0, -speed);
+        if(k === 's' || e.key === 'ArrowDown') move(0, speed);
+        if(k === 'a' || e.key === 'ArrowLeft') move(-speed, 0);
+        if(k === 'd' || e.key === 'ArrowRight') move(speed, 0);
+        if(k === 'n') handleN();
     };
 
     const setupBtn = (id, dx, dy) => {
@@ -103,14 +98,14 @@
         btn.ontouchstart = e => { e.preventDefault(); start(); };
         btn.ontouchend = stop;
     };
-    setupBtn('up', 0, -25); setupBtn('down', 0, 25); setupBtn('left', -25, 0); setupBtn('right', 25, 0);
+    setupBtn('up', 0, -30); setupBtn('down', 0, 30); setupBtn('left', -30, 0); setupBtn('right', 30, 0);
 
     function checkCollision() {
         const items = document.querySelectorAll('.item');
         const px = posX + window.innerWidth/2, py = posY + window.innerHeight/2;
         items.forEach(item => {
             const ix = parseFloat(item.style.left), iy = parseFloat(item.style.top);
-            if(Math.sqrt((px-ix)**2 + (py-iy)**2) < 45) {
+            if(Math.sqrt((px-ix)**2 + (py-iy)**2) < 50) {
                 const t = item.innerText;
                 if(counts[t] < 10) {
                     counts[t]++;
@@ -131,10 +126,10 @@
     function handleN() {
         if(!gameFinished || nPressed >= 10) return;
         nPressed++;
-        for(let i=0; i<8; i++) spawnFW();
+        for(let i=0; i<10; i++) spawnFW();
         if(nPressed === 10) {
             document.getElementById('btn-n').style.display = 'none';
-            alert("CHÚC MỪNG: MINH LỎ SKIBIDI QUÁ!");
+            alert("ĐÃ PHÁ ĐẢO THẾ GIỚI MINH LỎ!");
             location.reload();
         }
     }
