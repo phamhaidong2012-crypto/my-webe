@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ - Survival Shooter</title>
+    <title>Minh Lỏ Classic Shooter</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: sans-serif; touch-action: none; color: white; }
-        canvas { display: block; }
-        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 15px; border: 2px solid #0f0; text-align: center; z-index: 100; min-width: 300px; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; color: white; }
+        #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
+        canvas { position: relative; z-index: 10; display: block; }
+        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 15px; border: 2px solid lime; text-align: center; z-index: 100; min-width: 280px; }
         .stats { display: flex; justify-content: center; gap: 8px; font-weight: bold; font-size: 13px; margin-top: 5px; }
         #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 55px); gap: 8px; z-index: 100; }
         #action-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; }
@@ -18,8 +19,9 @@
 </head>
 <body>
 
+<div id="bg"></div>
 <div id="ui">
-    <div style="color: #0f0; font-weight: bold;">DIỆT 10 MỖI LOẠI ĐỂ THẮNG</div>
+    <div style="color: lime; font-weight: bold;">SURVIVAL: DIỆT 10 MỖI LOẠI</div>
     <div class="stats">
         <div>M: <span id="c1">0</span>/10 | L: <span id="c2">0</span>/10 | S: <span id="c3">0</span>/10 | Q: <span id="c4">0</span>/10</div>
     </div>
@@ -43,25 +45,27 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const bg = document.getElementById('bg');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const player = { x: canvas.width/2, y: canvas.height/2, angle: 0, speed: 4, rotSpeed: 0.08, hp: 10, lastHit: 0 };
+    // Camera/Vị trí thế giới
+    let worldX = 0, worldY = 0;
+    const player = { angle: 0, speed: 5, rotSpeed: 0.08, hp: 10, lastHit: 0 };
     const bullets = [], enemies = [], particles = [];
     const counts = { 'Minh': 0, 'Lỏ': 0, 'Skibidi': 0, 'Quá': 0 };
     const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
     const input = { up: false, down: false, left: false, right: false, rotL: false, rotR: false };
     let gameOver = false;
 
-    function createExplosion(x, y, color) {
-        for(let i=0; i<12; i++) {
-            particles.push({ x, y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 1.0, color });
-        }
-    }
-
     function shoot() {
         if(gameOver) return;
-        bullets.push({ x: player.x + Math.cos(player.angle)*30, y: player.y + Math.sin(player.angle)*30, vx: Math.cos(player.angle)*10, vy: Math.sin(player.angle)*10 });
+        bullets.push({
+            x: worldX + canvas.width/2 + Math.cos(player.angle)*40,
+            y: worldY + canvas.height/2 + Math.sin(player.angle)*40,
+            vx: Math.cos(player.angle)*12,
+            vy: Math.sin(player.angle)*12
+        });
     }
 
     const bindBtn = (id, key) => {
@@ -76,81 +80,112 @@
     bindBtn('rot-left', 'rotL'); bindBtn('rot-right', 'rotR');
     document.getElementById('btn-shoot').onclick = shoot;
 
+    // Sinh quái ở xa camera
     setInterval(() => {
         if(gameOver) return;
-        const side = Math.floor(Math.random() * 4);
-        let x, y;
-        if(side === 0) { x = Math.random()*canvas.width; y = -50; }
-        else if(side === 1) { x = canvas.width+50; y = Math.random()*canvas.height; }
-        else if(side === 2) { x = Math.random()*canvas.width; y = canvas.height+50; }
-        else { x = -50; y = Math.random()*canvas.height; }
-        enemies.push({ x, y, text: words[Math.floor(Math.random()*4)], speed: 1.5, color: `hsl(${Math.random()*360}, 100%, 70%)` });
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 600;
+        enemies.push({
+            x: worldX + canvas.width/2 + Math.cos(angle)*dist,
+            y: worldY + canvas.height/2 + Math.sin(angle)*dist,
+            text: words[Math.floor(Math.random()*4)],
+            speed: 1.5,
+            color: `hsl(${Math.random()*360}, 100%, 75%)`
+        });
     }, 1000);
 
     function update() {
         if(gameOver) return;
-        if(input.up) player.y -= player.speed; if(input.down) player.y += player.speed;
-        if(input.left) player.x -= player.speed; if(input.right) player.x += player.speed;
-        if(input.rotL) player.angle -= player.rotSpeed; if(input.rotR) player.angle += player.rotSpeed;
+        
+        // Di chuyển mượt mà (không bị vọt)
+        if(input.up) worldY -= player.speed;
+        if(input.down) worldY += player.speed;
+        if(input.left) worldX -= player.speed;
+        if(input.right) worldX += player.speed;
+        if(input.rotL) player.angle -= player.rotSpeed;
+        if(input.rotR) player.angle += player.rotSpeed;
+
+        // Cập nhật hình nền di chuyển
+        bg.style.backgroundPosition = `${-worldX}px ${-worldY}px`;
 
         bullets.forEach((b, bi) => {
             b.x += b.vx; b.y += b.vy;
-            if(b.x < -50 || b.x > canvas.width+50 || b.y < -50 || b.y > canvas.height+50) bullets.splice(bi, 1);
+            const distToPlayer = Math.sqrt((b.x - (worldX + canvas.width/2))**2 + (b.y - (worldY + canvas.height/2))**2);
+            if(distToPlayer > 1000) bullets.splice(bi, 1);
         });
-
-        particles.forEach((p, pi) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if(p.life <= 0) particles.splice(pi, 1); });
 
         const now = Date.now();
         enemies.forEach((en, ei) => {
-            const dx = player.x-en.x, dy = player.y-en.y, dist = Math.sqrt(dx*dx+dy*dy);
-            en.x += (dx/dist)*en.speed; en.y += (dy/dist)*en.speed;
+            const dx = (worldX + canvas.width/2) - en.x;
+            const dy = (worldY + canvas.height/2) - en.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            en.x += (dx/dist)*en.speed;
+            en.y += (dy/dist)*en.speed;
 
-            // Chữ chạm người (mất máu mỗi 1 giây)
-            if(dist < 40 && now - player.lastHit > 1000) {
+            if(dist < 45 && now - player.lastHit > 1000) {
                 player.hp--;
                 player.lastHit = now;
-                if(player.hp <= 0) {
-                    gameOver = true;
-                    alert("BẠN ĐÃ TỬ TRẬN! MINH LỎ QUÁ!");
-                    location.reload();
-                }
+                if(player.hp <= 0) { alert("THUA RỒI!"); location.reload(); }
             }
 
             bullets.forEach((b, bi) => {
-                if(Math.sqrt((b.x-en.x)**2 + (b.y-en.y)**2) < 30) {
-                    createExplosion(en.x, en.y, en.color);
+                if(Math.sqrt((b.x-en.x)**2 + (b.y-en.y)**2) < 35) {
+                    for(let i=0; i<10; i++) particles.push({x: en.x, y: en.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: en.color});
                     if(counts[en.text] < 10) {
                         counts[en.text]++;
                         ['c1','c2','c3','c4'].forEach((id, i) => document.getElementById(id).innerText = counts[words[i]]);
                     }
                     enemies.splice(ei, 1); bullets.splice(bi, 1);
-                    if(Object.values(counts).every(v => v >= 10)) { gameOver = true; alert("RAMBO MINH LỎ CHIẾN THẮNG!"); location.reload(); }
+                    if(Object.values(counts).every(v => v >= 10)) { alert("PHÁ ĐẢO!"); location.reload(); }
                 }
             });
         });
+
+        particles.forEach((p, pi) => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; if(p.life <= 0) particles.splice(pi, 1); });
     }
 
     function draw() {
-        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
+        ctx.save();
+        ctx.translate(-worldX, -worldY);
+
+        // Vẽ nổ
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); });
         ctx.globalAlpha = 1;
 
-        // Vẽ Thanh Máu trên đầu
-        ctx.fillStyle = '#333'; ctx.fillRect(player.x - 25, player.y - 55, 50, 8);
-        ctx.fillStyle = player.hp > 3 ? '#0f0' : '#f00';
-        ctx.fillRect(player.x - 25, player.y - 55, (player.hp/10)*50, 8);
+        // Vẽ đạn
+        ctx.fillStyle = 'yellow';
+        bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
 
-        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
-        ctx.fillStyle = player.hp > 0 ? '#0f0' : '#333';
-        ctx.beginPath(); ctx.moveTo(25, 0); ctx.lineTo(-15, -18); ctx.lineTo(-15, 18); ctx.closePath(); ctx.fill();
-        ctx.restore();
-        
-        ctx.fillStyle = 'yellow'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
+        // Vẽ kẻ địch
         ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
         enemies.forEach(en => { ctx.fillStyle = en.color; ctx.fillText(en.text, en.x, en.y); });
+        
+        ctx.restore();
 
-        update(); requestAnimationFrame(draw);
+        // Vẽ nhân vật cố định ở giữa màn hình (giống trò cũ)
+        const cx = canvas.width/2;
+        const cy = canvas.height/2;
+
+        // Máu
+        ctx.fillStyle = '#333'; ctx.fillRect(cx - 30, cy - 60, 60, 10);
+        ctx.fillStyle = 'lime'; ctx.fillRect(cx - 30, cy - 60, (player.hp/10)*60, 10);
+
+        // Minh Lỏ
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(player.angle);
+        ctx.fillStyle = 'lime';
+        ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.fill(); // Hình tròn giống bản đầu
+        ctx.fillStyle = 'black'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center';
+        ctx.fillText("Minh Lỏ", 0, 5);
+        // Họng súng
+        ctx.fillStyle = 'white'; ctx.fillRect(30, -5, 15, 10);
+        ctx.restore();
+
+        update();
+        requestAnimationFrame(draw);
     }
     draw();
 </script>
