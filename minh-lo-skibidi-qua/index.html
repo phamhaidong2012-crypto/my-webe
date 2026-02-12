@@ -3,74 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ Pro Game</title>
+    <title>Minh Lỏ Item Spawner</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial', sans-serif; touch-action: none; }
-        
-        /* Nền gạch */
-        #bg {
-            position: fixed; width: 100vw; height: 100vh;
-            background-image: 
-                linear-gradient(to right, #111 1px, transparent 1px),
-                linear-gradient(to bottom, #111 1px, transparent 1px);
-            background-size: 80px 80px; z-index: 1;
-        }
-
-        /* Bảng nhiệm vụ ở giữa góc trên */
-        #game-ui { 
-            position: fixed; top: 10px; left: 50%; transform: translateX(-50%); 
-            background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 20px; 
-            border: 2px solid lime; z-index: 200; color: white; text-align: center;
-            min-width: 250px; box-shadow: 0 0 15px lime;
-        }
-        .task-list { display: flex; justify-content: center; gap: 10px; font-weight: bold; font-size: 14px; margin-top: 5px; }
-
-        /* Nhân vật chính trung tâm */
-        #player { 
-            position: fixed; top: 50%; left: 50%; width: 70px; height: 70px; 
-            background: #00ff00; border-radius: 50%; display: flex; align-items: center; 
-            justify-content: center; color: black; font-weight: bold;
-            box-shadow: 0 0 30px #00ff00; transform: translate(-50%, -50%); z-index: 100;
-        }
-
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
+        #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
+        #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 20px; border: 2px solid lime; z-index: 200; color: white; text-align: center; box-shadow: 0 0 15px lime; }
+        .task-list { display: flex; justify-content: center; gap: 10px; font-weight: bold; margin-top: 5px; }
+        #player { position: fixed; top: 50%; left: 50%; width: 70px; height: 70px; background: lime; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; box-shadow: 0 0 30px lime; transform: translate(-50%, -50%); z-index: 100; }
         #container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-
-        /* Bản sao sinh ra mỗi 0.5s */
-        .ghost { 
-            position: absolute; width: 70px; height: 70px; background: rgba(0, 255, 0, 0.1); 
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: rgba(255,255,255,0.1); font-size: 8px; z-index: 5; pointer-events: none;
-            transform: translate(-50%, -50%); transition: opacity 2s;
-        }
-
-        .item { position: absolute; font-weight: bold; font-size: 20px; transform: translate(-50%, -50%); z-index: 20; text-shadow: 0 0 5px white; }
         
-        /* Nút bấm */
+        /* Style cho các mảnh chữ sinh ra */
+        .item { position: absolute; font-weight: bold; font-size: 22px; transform: translate(-50%, -50%); z-index: 20; text-shadow: 0 0 10px white; white-space: nowrap; }
+        
         #controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 55px); gap: 8px; z-index: 200; }
-        .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.15); border: 1px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; user-select: none; }
-        #btn-n { position: fixed; bottom: 30px; right: 30px; width: 90px; height: 90px; background: gold; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; z-index: 210; border: 5px solid #fff; font-size: 30px; box-shadow: 0 0 20px orange; }
-
-        /* Hiệu ứng pháo hoa chữ */
-        .firework-text {
-            position: fixed; pointer-events: none; font-weight: bold; z-index: 300;
-            animation: fly 1.5s ease-out forwards;
-        }
-        @keyframes fly {
-            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            100% { transform: translate(var(--tx), var(--ty)) scale(3) rotate(360deg); opacity: 0; }
-        }
+        .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.2); border: 1px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; user-select: none; }
+        #btn-n { position: fixed; bottom: 30px; right: 30px; width: 90px; height: 90px; background: gold; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; z-index: 210; border: 5px solid #fff; font-size: 35px; box-shadow: 0 0 20px orange; }
+        .fw { position: fixed; pointer-events: none; font-weight: bold; z-index: 300; animation: fly 1s ease-out forwards; }
+        @keyframes fly { 0% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(4); opacity: 0; } }
     </style>
 </head>
 <body>
 
 <div id="bg"></div>
 <div id="game-ui">
-    <div style="color: gold; font-size: 16px;">NHIỆM VỤ THU THẬP</div>
+    <div style="color: gold; letter-spacing: 2px;">BẢN ĐỒ NHIỆM VỤ</div>
     <div class="task-list">
-        <div>M: <span id="c1" style="color:lime">0</span>/10</div>
-        <div>L: <span id="c2" style="color:lime">0</span>/10</div>
-        <div>S: <span id="c3" style="color:lime">0</span>/10</div>
-        <div>Q: <span id="c4" style="color:lime">0</span>/10</div>
+        <div>Minh: <span id="c1">0</span>/10</div>
+        <div>Lỏ: <span id="c2">0</span>/10</div>
+        <div>Skibidi: <span id="c3">0</span>/10</div>
+        <div>Quá: <span id="c4">0</span>/10</div>
     </div>
 </div>
 
@@ -88,6 +49,7 @@
     const container = document.getElementById('container');
     const bg = document.getElementById('bg');
     const counts = { 'Minh': 0, 'Lỏ': 0, 'Skibidi': 0, 'Quá': 0 };
+    const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
     let gameFinished = false, nPressed = 0;
 
     function draw() {
@@ -96,82 +58,72 @@
         checkCollision();
     }
 
-    // SINH BẢN SAO MỖI 0.5 GIÂY (0,5 GIÂY)
+    // CỨ 0.5 GIÂY SINH 1 CHỮ (MẢNH NHIỆM VỤ) NGAY TẠI NHÂN VẬT
     setInterval(() => {
         if(gameFinished) return;
-        const ghost = document.createElement('div');
-        ghost.className = 'ghost';
-        ghost.innerText = 'Minh Lỏ';
-        ghost.style.left = (posX + window.innerWidth/2) + 'px';
-        ghost.style.top = (posY + window.innerHeight/2) + 'px';
-        container.appendChild(ghost);
-        setTimeout(() => ghost.style.opacity = '0', 3000);
-        setTimeout(() => ghost.remove(), 5000);
+        
+        const item = document.createElement('div');
+        item.className = 'item';
+        // Chọn ngẫu nhiên 1 trong 4 chữ
+        const randomWord = words[Math.floor(Math.random() * words.length)];
+        item.innerText = randomWord;
+        item.style.color = `hsl(${Math.random()*360}, 100%, 75%)`;
+        
+        // Đặt ngay tọa độ hiện tại của nhân vật
+        item.style.left = (posX + window.innerWidth/2) + 'px';
+        item.style.top = (posY + window.innerHeight/2) + 'px';
+        
+        container.appendChild(item);
     }, 500);
 
-    // Tạo vật phẩm
-    const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
-    words.forEach(word => {
-        for(let i=0; i<10; i++) {
-            const item = document.createElement('div');
-            item.className = 'item';
-            item.innerText = word;
-            item.style.color = `hsl(${Math.random()*360}, 100%, 70%)`;
-            item.style.left = (Math.random() * 4000 - 2000) + 'px';
-            item.style.top = (Math.random() * 4000 - 2000) + 'px';
-            container.appendChild(item);
-        }
-    });
-
     function move(dx, dy) {
-        if(gameFinished && nPressed < 10) return; 
+        if(gameFinished && nPressed < 10) return;
         posX += dx; posY += dy;
         draw();
     }
 
-    // Điều khiển phím
-    const speed = 40;
-    window.addEventListener('keydown', e => {
+    // Điều khiển
+    const speed = 35;
+    window.onkeydown = e => {
         if(e.key === 'w' || e.key === 'ArrowUp') move(0, -speed);
         if(e.key === 's' || e.key === 'ArrowDown') move(0, speed);
         if(e.key === 'a' || e.key === 'ArrowLeft') move(-speed, 0);
         if(e.key === 'd' || e.key === 'ArrowRight') move(speed, 0);
         if(e.key.toLowerCase() === 'n') handleN();
-    });
+    };
 
-    // Điều khiển nút
     const setupBtn = (id, dx, dy) => {
         const btn = document.getElementById(id);
-        let interval;
-        const start = () => interval = setInterval(() => move(dx, dy), 50);
-        const stop = () => clearInterval(interval);
+        let inv;
+        const start = () => inv = setInterval(() => move(dx, dy), 50);
+        const stop = () => clearInterval(inv);
         btn.onmousedown = start; btn.onmouseup = stop;
         btn.ontouchstart = e => { e.preventDefault(); start(); };
         btn.ontouchend = stop;
     };
-    setupBtn('up', 0, -25); setupBtn('down', 0, 25); setupBtn('left', -25, 0); setupBtn('right', 25, 0);
+    setupBtn('up', 0, -20); setupBtn('down', 0, 20); setupBtn('left', -20, 0); setupBtn('right', 20, 0);
 
     function checkCollision() {
         const items = document.querySelectorAll('.item');
-        const px = posX + window.innerWidth/2;
-        const py = posY + window.innerHeight/2;
-
+        const px = posX + window.innerWidth/2, py = posY + window.innerHeight/2;
+        
         items.forEach(item => {
-            const ix = parseFloat(item.style.left);
-            const iy = parseFloat(item.style.top);
-            const d = Math.sqrt((px-ix)**2 + (py-iy)**2);
-            if(d < 50) {
+            const ix = parseFloat(item.style.left), iy = parseFloat(item.style.top);
+            // Nếu chạm vào chữ (khoảng cách < 40)
+            if(Math.sqrt((px-ix)**2 + (py-iy)**2) < 40) {
                 const t = item.innerText;
-                counts[t]++;
-                document.getElementById('c1').innerText = counts['Minh'];
-                document.getElementById('c2').innerText = counts['Lỏ'];
-                document.getElementById('c3').innerText = counts['Skibidi'];
-                document.getElementById('c4').innerText = counts['Quá'];
-                item.remove();
-                if(Object.values(counts).every(v => v >= 10)) {
-                    gameFinished = true;
-                    document.getElementById('btn-n').style.display = 'flex';
-                    alert("NHIỆM VỤ XONG! ẤN N 10 LẦN ĐỂ KẾT HỢP!");
+                if(counts[t] < 10) {
+                    counts[t]++;
+                    document.getElementById('c1').innerText = counts['Minh'];
+                    document.getElementById('c2').innerText = counts['Lỏ'];
+                    document.getElementById('c3').innerText = counts['Skibidi'];
+                    document.getElementById('c4').innerText = counts['Quá'];
+                    item.remove(); // Nhặt xong thì biến mất
+                    
+                    if(Object.values(counts).every(v => v >= 10)) {
+                        gameFinished = true;
+                        document.getElementById('btn-n').style.display = 'flex';
+                    }
                 }
             }
         });
@@ -180,33 +132,27 @@
     function handleN() {
         if(!gameFinished || nPressed >= 10) return;
         nPressed++;
-        // Hiệu ứng pháo hoa mỗi lần ấn
-        spawnFireworkText();
+        // Hiệu ứng pháo hoa chữ
+        for(let i=0; i<8; i++) spawnFW();
         
         if(nPressed === 10) {
-            for(let i=0; i<20; i++) setTimeout(spawnFireworkText, i * 100);
-            setTimeout(() => {
-                alert("CHÚC MỪNG MINH LỎ SKIBIDI QUÁ!");
-                location.reload();
-            }, 3000);
+            document.getElementById('btn-n').style.display = 'none';
+            alert("CHÚC MỪNG: MINH LỎ SKIBIDI QUÁ!");
+            location.reload(); 
         }
     }
 
-    function spawnFireworkText() {
-        const wordsFW = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
-        const word = wordsFW[Math.floor(Math.random()*wordsFW.length)];
+    function spawnFW() {
         const fw = document.createElement('div');
-        fw.className = 'firework-text';
-        fw.innerText = word;
-        fw.style.left = '50%';
-        fw.style.top = '50%';
-        fw.style.color = `hsl(${Math.random()*360}, 100%, 50%)`;
-        fw.style.setProperty('--tx', (Math.random() - 0.5) * 800 + 'px');
-        fw.style.setProperty('--ty', (Math.random() - 0.5) * 800 + 'px');
+        fw.className = 'fw';
+        fw.innerText = words[Math.floor(Math.random()*4)];
+        fw.style.left = '50%'; fw.style.top = '50%';
+        fw.style.color = `hsl(${Math.random()*360}, 100%, 60%)`;
+        fw.style.setProperty('--tx', (Math.random()-0.5)*800+'px');
+        fw.style.setProperty('--ty', (Math.random()-0.5)*800+'px');
         document.body.appendChild(fw);
-        setTimeout(() => fw.remove(), 1500);
+        setTimeout(() => fw.remove(), 1000);
     }
-
     document.getElementById('btn-n').onclick = handleN;
 </script>
 </body>
