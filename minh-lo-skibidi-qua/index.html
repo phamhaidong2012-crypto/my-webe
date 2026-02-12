@@ -3,30 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ 360 Shooter</title>
+    <title>Minh Lỏ - Hiệu Ứng Nổ</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; font-family: sans-serif; touch-action: none; color: white; }
         canvas { display: block; }
-        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 15px; border: 2px solid #0f0; text-align: center; z-index: 100; min-width: 280px; }
-        .stats { display: flex; justify-content: center; gap: 10px; font-weight: bold; font-size: 14px; margin-top: 5px; }
-        
-        /* Điều khiển di chuyển bên trái */
+        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 15px; border: 2px solid #0f0; text-align: center; z-index: 100; min-width: 300px; box-shadow: 0 0 15px #0f0; }
+        .stats { display: flex; justify-content: center; gap: 8px; font-weight: bold; font-size: 13px; margin-top: 5px; }
         #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 55px); gap: 8px; z-index: 100; }
-        
-        /* Điều khiển xoay và bắn bên phải */
         #action-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; }
         .rotate-group { display: flex; gap: 10px; }
-        
         .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.1); border: 2px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; user-select: none; }
-        #btn-shoot { width: 90px; height: 90px; background: #ff4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid white; box-shadow: 0 0 15px red; }
+        #btn-shoot { width: 90px; height: 90px; background: #ff4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid white; box-shadow: 0 0 20px red; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="color: #0f0;">NHIỆM VỤ: DIỆT 2 MỖI LOẠI</div>
+    <div style="color: #0f0; font-weight: bold;">MỤC TIÊU: DIỆT 10 MỖI LOẠI</div>
     <div class="stats">
-        <div>M: <span id="c1">0</span>/2 | L: <span id="c2">0</span>/2 | S: <span id="c3">0</span>/2 | Q: <span id="c4">0</span>/2</div>
+        <div>M: <span id="c1">0</span>/10</div>
+        <div>L: <span id="c2">0</span>/10</div>
+        <div>S: <span id="c3">0</span>/10</div>
+        <div>Q: <span id="c4">0</span>/10</div>
     </div>
 </div>
 
@@ -51,49 +49,48 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const player = { x: canvas.width/2, y: canvas.height/2, angle: 0, speed: 4, rotSpeed: 0.07 };
+    const player = { x: canvas.width/2, y: canvas.height/2, angle: 0, speed: 4, rotSpeed: 0.08 };
     const bullets = [];
     const enemies = [];
+    const particles = [];
     const counts = { 'Minh': 0, 'Lỏ': 0, 'Skibidi': 0, 'Quá': 0 };
     const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
     const input = { up: false, down: false, left: false, right: false, rotL: false, rotR: false };
     let gameWin = false;
 
+    // Tạo hiệu ứng nổ
+    function createExplosion(x, y, color) {
+        for(let i=0; i<15; i++) {
+            particles.push({
+                x, y,
+                vx: (Math.random()-0.5)*10,
+                vy: (Math.random()-0.5)*10,
+                life: 1.0,
+                color
+            });
+        }
+    }
+
     function shoot() {
         bullets.push({
             x: player.x + Math.cos(player.angle) * 30,
             y: player.y + Math.sin(player.angle) * 30,
-            vx: Math.cos(player.angle) * 8,
-            vy: Math.sin(player.angle) * 8
+            vx: Math.cos(player.angle) * 10,
+            vy: Math.sin(player.angle) * 10
         });
     }
 
-    // Gán sự kiện nhấn giữ
     const bindBtn = (id, key) => {
         const el = document.getElementById(id);
         const start = (e) => { e.preventDefault(); input[key] = true; };
         const end = () => input[key] = false;
-        el.ontouchstart = start; el.ontouchend = end;
+        el.addEventListener('touchstart', start); el.addEventListener('touchend', end);
         el.onmousedown = start; el.onmouseup = end; el.onmouseleave = end;
     };
 
     bindBtn('up', 'up'); bindBtn('down', 'down'); bindBtn('left', 'left'); bindBtn('right', 'right');
     bindBtn('rot-left', 'rotL'); bindBtn('rot-right', 'rotR');
     document.getElementById('btn-shoot').onclick = shoot;
-
-    window.onkeydown = (e) => {
-        const k = e.key.toLowerCase();
-        if(k === 'w') input.up = true; if(k === 's') input.down = true;
-        if(k === 'a') input.left = true; if(k === 'd') input.right = true;
-        if(k === 'q') input.rotL = true; if(k === 'e') input.rotR = true;
-        if(e.key === ' ') shoot();
-    };
-    window.onkeyup = (e) => {
-        const k = e.key.toLowerCase();
-        if(k === 'w') input.up = false; if(k === 's') input.down = false;
-        if(k === 'a') input.left = false; if(k === 'd') input.right = false;
-        if(k === 'q') input.rotL = false; if(k === 'e') input.rotR = false;
-    };
 
     setInterval(() => {
         if(gameWin) return;
@@ -103,8 +100,8 @@
         else if(side === 1) { x = canvas.width+50; y = Math.random()*canvas.height; }
         else if(side === 2) { x = Math.random()*canvas.width; y = canvas.height+50; }
         else { x = -50; y = Math.random()*canvas.height; }
-        enemies.push({ x, y, text: words[Math.floor(Math.random()*words.length)], speed: 1.2, color: `hsl(${Math.random()*360}, 100%, 70%)` });
-    }, 1500);
+        enemies.push({ x, y, text: words[Math.floor(Math.random()*4)], speed: 1.5, color: `hsl(${Math.random()*360}, 100%, 70%)` });
+    }, 800);
 
     function update() {
         if(gameWin) return;
@@ -115,25 +112,29 @@
         if(input.rotL) player.angle -= player.rotSpeed;
         if(input.rotR) player.angle += player.rotSpeed;
 
-        player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
-        player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
-
         bullets.forEach((b, bi) => {
             b.x += b.vx; b.y += b.vy;
             if(b.x < -50 || b.x > canvas.width+50 || b.y < -50 || b.y > canvas.height+50) bullets.splice(bi, 1);
         });
 
+        particles.forEach((p, pi) => {
+            p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+            if(p.life <= 0) particles.splice(pi, 1);
+        });
+
         enemies.forEach((en, ei) => {
-            const dx = player.x - en.x, dy = player.y - en.y, dist = Math.sqrt(dx*dx + dy*dy);
-            en.x += (dx/dist) * en.speed; en.y += (dy/dist) * en.speed;
+            const dx = player.x-en.x, dy = player.y-en.y, dist = Math.sqrt(dx*dx+dy*dy);
+            en.x += (dx/dist)*en.speed; en.y += (dy/dist)*en.speed;
+
             bullets.forEach((b, bi) => {
                 if(Math.sqrt((b.x-en.x)**2 + (b.y-en.y)**2) < 30) {
-                    if(counts[en.text] < 2) {
+                    createExplosion(en.x, en.y, en.color);
+                    if(counts[en.text] < 10) {
                         counts[en.text]++;
                         ['c1','c2','c3','c4'].forEach((id, i) => document.getElementById(id).innerText = counts[words[i]]);
                     }
                     enemies.splice(ei, 1); bullets.splice(bi, 1);
-                    if(Object.values(counts).every(v => v >= 2)) { gameWin = true; alert("RAMBO MINH LỎ WIN!"); location.reload(); }
+                    if(Object.values(counts).every(v => v >= 10)) { gameWin = true; alert("RAMBO MINH LỎ ĐÃ PHÁ ĐẢO!"); location.reload(); }
                 }
             });
         });
@@ -141,11 +142,23 @@
 
     function draw() {
         ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Vẽ nổ
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 4, 4);
+        });
+        ctx.globalAlpha = 1;
+
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
         ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.moveTo(25, 0); ctx.lineTo(-15, -18); ctx.lineTo(-15, 18); ctx.closePath(); ctx.fill(); ctx.restore();
-        ctx.fillStyle = 'yellow'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
+        
+        ctx.fillStyle = 'yellow'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
+        
         ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
         enemies.forEach(en => { ctx.fillStyle = en.color; ctx.fillText(en.text, en.x, en.y); });
+
         update(); requestAnimationFrame(draw);
     }
     draw();
