@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ - Fix Di Chuyển</title>
+    <title>Hà Beo Béo Bèo Hunter</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; color: white; }
         #bg { position: fixed; width: 100vw; height: 100vh; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 60px 60px; z-index: 1; }
         canvas { position: relative; z-index: 10; display: block; }
-        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 15px; border: 2px solid lime; text-align: center; z-index: 100; min-width: 280px; }
+        #ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 15px; border: 2px solid #ff00ff; text-align: center; z-index: 100; min-width: 300px; box-shadow: 0 0 15px #ff00ff; }
         .stats { display: flex; justify-content: center; gap: 8px; font-weight: bold; font-size: 13px; margin-top: 5px; }
         #move-controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; z-index: 100; }
         #action-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 100; }
@@ -21,9 +21,9 @@
 
 <div id="bg"></div>
 <div id="ui">
-    <div style="color: lime; font-weight: bold;">SURVIVAL: DIỆT 10 MỖI LOẠI</div>
+    <div style="color: #ff00ff; font-weight: bold; letter-spacing: 1px;">SĂN HÀ BEO BÉO BÈO</div>
     <div class="stats">
-        <div>M: <span id="c1">0</span>/10 | L: <span id="c2">0</span>/10 | S: <span id="c3">0</span>/10 | Q: <span id="c4">0</span>/10</div>
+        <div>HÀ: <span id="c1">0</span>/10 | BEO: <span id="c2">0</span>/10 | BÉO: <span id="c3">0</span>/10 | BÈO: <span id="c4">0</span>/10</div>
     </div>
 </div>
 
@@ -52,10 +52,8 @@
     let worldX = 0, worldY = 0;
     const player = { angle: 0, speed: 5, rotSpeed: 0.08, hp: 10, lastHit: 0 };
     const bullets = [], enemies = [], particles = [];
-    const counts = { 'Minh': 0, 'Lỏ': 0, 'Skibidi': 0, 'Quá': 0 };
-    const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
-    
-    // Hệ thống phím chuẩn: Nhấn là đi, thả là dừng
+    const counts = { 'HÀ': 0, 'BEO': 0, 'BÉO': 0, 'BÈO': 0 };
+    const words = ['HÀ', 'BEO', 'BÉO', 'BÈO'];
     const keys = { up: false, down: false, left: false, right: false, rotL: false, rotR: false };
 
     function bind(id, key) {
@@ -88,13 +86,12 @@
             x: worldX + canvas.width/2 + Math.cos(angle)*600,
             y: worldY + canvas.height/2 + Math.sin(angle)*600,
             text: words[Math.floor(Math.random()*4)],
-            speed: 1.5,
+            speed: 1.6,
             color: `hsl(${Math.random()*360}, 100%, 75%)`
         });
-    }, 1000);
+    }, 900);
 
     function update() {
-        // Chỉ di chuyển khi đang nhấn giữ nút
         if(keys.up) worldY -= player.speed;
         if(keys.down) worldY += player.speed;
         if(keys.left) worldX -= player.speed;
@@ -119,18 +116,18 @@
 
             if(dist < 45 && now - player.lastHit > 1000) {
                 player.hp--; player.lastHit = now;
-                if(player.hp <= 0) { alert("MINH LỎ QUÁ - BẠN THUA!"); location.reload(); }
+                if(player.hp <= 0) { alert("HÀ BEO QUÁ MẠNH - BẠN THUA!"); location.reload(); }
             }
 
             bullets.forEach((b, bi) => {
                 if(Math.sqrt((b.x-en.x)**2 + (b.y-en.y)**2) < 35) {
-                    for(let k=0; k<10; k++) particles.push({x: en.x, y: en.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: en.color});
+                    for(let k=0; k<12; k++) particles.push({x: en.x, y: en.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: en.color});
                     if(counts[en.text] < 10) {
                         counts[en.text]++;
                         ['c1','c2','c3','c4'].forEach((id, idx) => document.getElementById(id).innerText = counts[words[idx]]);
                     }
                     enemies.splice(i, 1); bullets.splice(bi, 1);
-                    if(Object.values(counts).every(v => v >= 10)) { alert("CHIẾN THẮNG!"); location.reload(); }
+                    if(Object.values(counts).every(v => v >= 10)) { alert("CHÚC MỪNG! BẠN ĐÃ THU PHỤC ĐƯỢC HÀ BEO BÉO BÈO!"); location.reload(); }
                 }
             });
         });
@@ -143,22 +140,21 @@
         ctx.translate(-worldX, -worldY);
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); });
         ctx.globalAlpha = 1;
-        ctx.fillStyle = 'yellow'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
-        ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#00ffff'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
+        ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
         enemies.forEach(en => { ctx.fillStyle = en.color; ctx.fillText(en.text, en.x, en.y); });
         ctx.restore();
 
-        // Vẽ Minh Lỏ ở trung tâm
         const cx = canvas.width/2, cy = canvas.height/2;
         ctx.fillStyle = '#333'; ctx.fillRect(cx - 30, cy - 60, 60, 10);
-        ctx.fillStyle = 'lime'; ctx.fillRect(cx - 30, cy - 60, (player.hp/10)*60, 10);
+        ctx.fillStyle = '#ff00ff'; ctx.fillRect(cx - 30, cy - 60, (player.hp/10)*60, 10);
         
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(player.angle);
         ctx.fillStyle = 'lime'; ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'black'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.fillText("Minh Lỏ", 0, 5);
-        ctx.fillStyle = 'white'; ctx.fillRect(30, -5, 15, 10); // Nòng súng
+        ctx.fillStyle = 'black'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.fillText("Minh Lỏ", 0, 5);
+        ctx.fillStyle = 'white'; ctx.fillRect(30, -5, 18, 10); // Nòng súng
         ctx.restore();
 
         update();
