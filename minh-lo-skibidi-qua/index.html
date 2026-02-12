@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trân Ngu Tank - Ultimate</title>
+    <title>Trân Ngu Tank - Ultimate Fixed</title>
     <style>
         body { margin: 0; overflow: hidden; background: #999; font-family: sans-serif; touch-action: none; color: white; }
         .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; background: #aaa; }
@@ -13,7 +13,7 @@
 
         /* Kỹ năng */
         #skill-menu { background: #888; border: 4px solid #00ffff; }
-        .skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #888; padding: 20px; }
+        .skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #888; padding: 20px; max-height: 60vh; overflow-y: auto; }
         .skill-slot { width: 65px; height: 65px; background: white; border: 4px solid #ccc; cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; font-size: 10px; color: black; font-weight: bold; text-align: center; }
         .tier-0 { border-color: #0f0; } .tier-1 { border-color: #00ffff; } .tier-2 { border-color: #ff0; } .tier-3 { border-color: #f0f; }
         .selected { background: #cfc; border-style: dotted; }
@@ -26,12 +26,13 @@
         .btn-green { background: #28a745; } .btn-red { background: #dc3545; }
 
         /* Nút trong trận */
-        #controls { position: fixed; bottom: 20px; left: 20px; display: none; grid-template-columns: repeat(3, 60px); gap: 10px; z-index: 500; }
-        #skill-buttons { position: fixed; bottom: 20px; right: 20px; display: none; flex-direction: column; gap: 10px; z-index: 500; }
-        .joy-btn { width: 60px; height: 60px; background: rgba(255,255,255,0.5); border: 3px solid black; color: black; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
-        .skill-btn { width: 70px; height: 70px; background: orange; border-radius: 50%; border: 4px solid white; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; text-align: center; }
+        #controls { position: fixed; bottom: 30px; left: 30px; display: none; grid-template-columns: repeat(3, 70px); gap: 10px; z-index: 500; }
+        #skill-buttons { position: fixed; bottom: 30px; right: 30px; display: none; flex-direction: column; gap: 15px; z-index: 500; }
+        .joy-btn { width: 70px; height: 70px; background: rgba(255,255,255,0.7); border: 4px solid black; color: black; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 15px; user-select: none; -webkit-user-select: none; }
+        .skill-btn { width: 80px; height: 80px; background: orange; border-radius: 50%; border: 4px solid white; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; text-align: center; box-shadow: 0 5px #a50; cursor: pointer; }
+        .skill-btn:active { transform: translateY(3px); box-shadow: 0 2px #a50; }
 
-        canvas { display: none; background: #1a1a1a; }
+        canvas { display: none; background: #1a1a1a; width: 100vw; height: 100vh; }
         #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; pointer-events: none; display:none; }
     </style>
 </head>
@@ -47,7 +48,7 @@
 </div>
 
 <div id="skill-menu" class="screen">
-    <h1 style="color:white; -webkit-text-stroke: 1px black;">kĩ năng</h1>
+    <h1 style="color:white; -webkit-text-stroke: 1px black;">KHO KĨ NĂNG</h1>
     <div class="skill-grid" id="skill-grid"></div>
     <p>Đã chọn: <span id="skill-count">0</span>/3</p>
     <button class="btn-box" style="width:80px; height:40px" onclick="showScreen('main-menu')">XONG</button>
@@ -58,7 +59,7 @@
         <p id="pop-desc" style="font-size:11px; text-align:center"></p>
         <div style="font-weight:bold">GIÁ: <span id="pop-price">0</span> Xu</div>
         <button id="pop-buy-btn" class="buy-btn">MUA</button>
-        <button onclick="closePopup()" style="margin-top:5px; background:none; text-decoration:underline;">Đóng</button>
+        <button onclick="closePopup()" style="margin-top:5px; background:none; text-decoration:underline; cursor:pointer">Đóng</button>
     </div>
 </div>
 
@@ -68,14 +69,14 @@
         H <input type="range" id="h-range" min="0" max="360" value="0"><br>
         S <input type="range" id="s-range" min="0" max="100" value="50"><br>
         B <input type="range" id="b-range" min="0" max="100" value="50">
-        <div id="tank-preview" style="width:50px; height:50px; border:2px solid black; margin-top:10px;"></div>
+        <div id="tank-preview" style="width:50px; height:50px; border:2px solid black; margin-top:10px; background: hsl(0, 50%, 50%);"></div>
     </div>
     <button class="btn-box" style="width:80px; height:40px" onclick="showScreen('main-menu')">XONG</button>
 </div>
 
 <div id="controls">
-    <div></div><div class="joy-btn" onmousedown="move('up')" onmouseup="stopMove()">↑</div><div></div>
-    <div class="joy-btn" onmousedown="move('left')" onmouseup="stopMove()">←</div><div class="joy-btn" onmousedown="move('down')" onmouseup="stopMove()">↓</div><div class="joy-btn" onmousedown="move('right')" onmouseup="stopMove()">→</div>
+    <div></div><div class="joy-btn" ontouchstart="startMove('up')" ontouchend="stopMove()" onmousedown="startMove('up')" onmouseup="stopMove()">↑</div><div></div>
+    <div class="joy-btn" ontouchstart="startMove('left')" ontouchend="stopMove()" onmousedown="startMove('left')" onmouseup="stopMove()">←</div><div class="joy-btn" ontouchstart="startMove('down')" ontouchend="stopMove()" onmousedown="startMove('down')" onmouseup="stopMove()">↓</div><div class="joy-btn" ontouchstart="startMove('right')" ontouchend="stopMove()" onmousedown="startMove('right')" onmouseup="stopMove()">→</div>
 </div>
 <div id="skill-buttons"></div>
 
@@ -90,7 +91,13 @@
     const skillsData = [
         { id: 's1', n: '5 VIÊN', t: 0, p: 10, d: 'Bắn 5 viên liên tiếp dội tường.' },
         { id: 's2', n: 'TỐC +10%', t: 0, p: 10, d: 'Tăng tốc độ chạy.' },
+        { id: 's3', n: 'DMG +10%', t: 0, p: 10, d: 'Tăng sát thương.' },
         { id: 's4', n: 'LASER', t: 1, p: 200, d: 'Tia laser không xuyên tường.' },
+        { id: 's5', n: 'XUYÊN', t: 1, p: 200, d: 'Đạn xuyên tường.' },
+        { id: 's6', n: 'CHẬM', t: 1, p: 200, d: 'Làm chậm địch.' },
+        { id: 's7', n: 'LASER X', t: 2, p: 500, d: 'Laser xuyên thấu.' },
+        { id: 's8', n: 'KHIÊN', t: 2, p: 500, d: 'Bảo vệ xe tăng.' },
+        { id: 's9', n: 'TƯỜNG', t: 2, p: 500, d: 'Tạo tường vách.' },
         { id: 's10', n: 'KHÓA', t: 3, p: 1500, d: 'Khóa địch 5 giây.' },
         { id: 's11', n: 'KIẾM', t: 3, p: 1500, d: 'Quét 180 độ.' },
         { id: 's12', n: 'BOM', t: 3, p: 1500, d: 'Đặt bom hẹn giờ.' }
@@ -102,8 +109,7 @@
     }
 
     function renderSkills() {
-        const grid = document.getElementById('skill-grid');
-        grid.innerHTML = '';
+        const grid = document.getElementById('skill-grid'); grid.innerHTML = '';
         skillsData.forEach(s => {
             let div = document.createElement('div');
             div.className = `skill-slot tier-${s.t} ${currentSkills.includes(s.id)?'selected':''} ${ownedSkills.includes(s.id)?'owned':''}`;
@@ -114,19 +120,16 @@
     }
 
     function openPopup(skill) {
-        const pop = document.getElementById('skill-popup');
-        pop.style.display = 'flex';
+        const pop = document.getElementById('skill-popup'); pop.style.display = 'flex';
         document.getElementById('pop-name').innerText = skill.n;
         document.getElementById('pop-desc').innerText = skill.d;
         document.getElementById('pop-price').innerText = skill.p;
+        const vid = document.getElementById('video-preview'); vid.innerHTML = '';
         
-        const vid = document.getElementById('video-preview');
-        vid.innerHTML = '';
         if(skill.id === 's1') {
             vid.innerHTML = '<div style="position:absolute;left:10px;top:60px;width:20px;height:15px;background:white;border:1px solid red"></div><div id="anim-bullet" style="position:absolute;left:30px;top:65px;width:5px;height:5px;background:yellow;border-radius:50%"></div><div style="position:absolute;right:10px;top:0;width:5px;height:100%;background:grey"></div>';
-            let b = vid.querySelector('#anim-bullet');
             let x = 30, vx = 4;
-            setInterval(() => { x += vx; if(x > 220 || x < 30) vx *= -1; b.style.left = x + 'px'; }, 20);
+            setInterval(() => { x += vx; if(x > 220 || x < 30) vx *= -1; let b = document.getElementById('anim-bullet'); if(b) b.style.left = x + 'px'; }, 20);
         }
 
         const btn = document.getElementById('pop-buy-btn');
@@ -136,6 +139,7 @@
             btn.onclick = () => {
                 if(!currentSkills.includes(skill.id) && currentSkills.length < 3) currentSkills.push(skill.id);
                 else currentSkills = currentSkills.filter(i => i !== skill.id);
+                document.getElementById('skill-count').innerText = currentSkills.length;
                 renderSkills(); closePopup();
             };
         } else {
@@ -147,41 +151,48 @@
 
     function closePopup() { document.getElementById('skill-popup').style.display = 'none'; }
 
-    // GAME TRẬN ĐẤU
-    let player = { x: 100, y: 100, v: 0, a: 0 };
+    // LOGIC DI CHUYỂN ẤN GIỮ
+    let player = { x: 200, y: 200, a: 0 };
+    let moveDir = null;
+    function startMove(dir) { moveDir = dir; }
+    function stopMove() { moveDir = null; }
+
     function startGame() {
         showScreen('none');
         document.getElementById('gameCanvas').style.display = 'block';
         document.getElementById('controls').style.display = 'grid';
         document.getElementById('game-ui').style.display = 'block';
         const skBox = document.getElementById('skill-buttons');
-        skBox.style.display = 'flex';
-        skBox.innerHTML = '';
+        skBox.style.display = 'flex'; skBox.innerHTML = '';
         currentSkills.forEach(id => {
             let s = skillsData.find(x => x.id === id);
             let b = document.createElement('div');
             b.className = 'skill-btn'; b.innerHTML = s.n;
+            b.onclick = () => alert("Sử dụng: " + s.n);
             skBox.appendChild(b);
         });
         const canvas = document.getElementById('gameCanvas');
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-        update();
+        loop();
     }
 
-    function move(dir) {
-        if(dir === 'up') player.y -= 5;
-        if(dir === 'down') player.y += 5;
-        if(dir === 'left') player.x -= 5;
-        if(dir === 'right') player.x += 5;
-    }
-    function stopMove() {}
-
-    function update() {
+    function loop() {
+        if(moveDir) {
+            if(moveDir === 'up') { player.y -= 4; player.a = -Math.PI/2; }
+            if(moveDir === 'down') { player.y += 4; player.a = Math.PI/2; }
+            if(moveDir === 'left') { player.x -= 4; player.a = Math.PI; }
+            if(moveDir === 'right') { player.x += 4; player.a = 0; }
+        }
         const ctx = document.getElementById('gameCanvas').getContext('2d');
-        ctx.clearRect(0,0,3000,3000);
+        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0,0,window.innerWidth, window.innerHeight);
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.a);
         ctx.fillStyle = tankColor;
-        ctx.fillRect(player.x-20, player.y-15, 40, 30);
-        requestAnimationFrame(update);
+        ctx.fillRect(-20, -15, 40, 30);
+        ctx.fillStyle = "black"; ctx.fillRect(10, -5, 20, 10); // Nòng súng
+        ctx.restore();
+        requestAnimationFrame(loop);
     }
 
     ['h','s','b'].forEach(k => {
