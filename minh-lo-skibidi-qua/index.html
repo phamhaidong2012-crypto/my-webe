@@ -3,42 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minh Lỏ Center Game</title>
+    <title>Minh Lỏ Center</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; color: white; touch-action: none; }
-        /* Thế giới di chuyển */
-        #world { position: absolute; width: 5000px; height: 5000px; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 50px 50px; transition: 0.1s linear; }
-        #game-ui { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 2px solid lime; z-index: 100; pointer-events: none; }
-        /* Nhân vật chính luôn ở giữa */
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
+        
+        /* Nền di chuyển */
+        #bg {
+            position: fixed; width: 200vw; height: 200vh;
+            background-image: 
+                linear-gradient(to right, #222 1px, transparent 1px),
+                linear-gradient(to bottom, #222 1px, transparent 1px);
+            background-size: 100px 100px;
+            z-index: 1;
+        }
+
+        /* Nhân vật chính - Cố định ở giữa */
         #player { 
-            position: fixed; top: 50%; left: 50%; width: 70px; height: 70px; background: lime; border-radius: 50%; 
-            display: flex; align-items: center; justify-content: center; color: black; font-weight: bold;
-            box-shadow: 0 0 20px lime; z-index: 50; transform: translate(-50%, -50%); text-align: center;
+            position: fixed; top: 50%; left: 50%; width: 80px; height: 80px; 
+            background: lime; border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; color: black; font-weight: bold;
+            box-shadow: 0 0 30px lime; transform: translate(-50%, -50%); z-index: 100;
         }
-        /* Bản sao trong suốt */
+
+        /* Lớp chứa các vật phẩm và bóng ma - Di chuyển cùng nền */
+        #container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+
         .ghost { 
-            position: absolute; width: 70px; height: 70px; background: rgba(0, 255, 0, 0.2); border-radius: 50%; 
-            display: flex; align-items: center; justify-content: center; color: rgba(0,0,0,0.3); font-size: 10px; pointer-events: none; z-index: 5;
+            position: absolute; width: 80px; height: 80px; background: rgba(0, 255, 0, 0.15); 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: rgba(255,255,255,0.2); font-size: 10px; z-index: 5; pointer-events: none;
+            transform: translate(-50%, -50%);
         }
-        .item { position: absolute; font-weight: bold; font-size: 18px; z-index: 10; }
-        #controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 55px); gap: 10px; z-index: 100; }
-        .btn { width: 55px; height: 55px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; user-select: none; }
-        #btn-n { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; background: gold; color: black; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; font-size: 30px; z-index: 100; border: 4px solid white; }
-        #message { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); font-size: 24px; text-align: center; display: none; z-index: 100; background: rgba(0,0,0,0.5); padding: 10px; }
-        .firework { position: absolute; font-size: 40px; animation: explode 1s forwards; pointer-events: none; z-index: 200; }
-        @keyframes explode { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(3) translate(var(--x), var(--y)); opacity: 0; } }
+
+        .item { position: absolute; font-weight: bold; font-size: 20px; transform: translate(-50%, -50%); z-index: 20; }
+        
+        #game-ui { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 2px solid lime; z-index: 200; color: white; }
+        #controls { position: fixed; bottom: 20px; left: 20px; display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; z-index: 200; }
+        .btn { width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; user-select: none; }
+        #btn-n { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; background: gold; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; z-index: 200; border: 4px solid white; }
     </style>
 </head>
 <body>
+
+<div id="bg"></div>
+<div id="container"></div>
+<div id="player">Minh Lỏ</div>
 
 <div id="game-ui">
     <div>Minh: <span id="c1">0</span>/10 | Lỏ: <span id="c2">0</span>/10</div>
     <div>Skibidi: <span id="c3">0</span>/10 | Quá: <span id="c4">0</span>/10</div>
 </div>
-
-<div id="message"></div>
-<div id="world"></div>
-<div id="player">Minh Lỏ</div>
 
 <div id="controls">
     <div></div><div class="btn" id="up">↑</div><div></div>
@@ -47,20 +61,19 @@
 <div id="btn-n">N</div>
 
 <script>
-    const world = document.getElementById('world');
-    const player = document.getElementById('player');
-    const btnN = document.getElementById('btn-n');
+    let posX = 0, posY = 0; // Vị trí ảo của người chơi
+    const container = document.getElementById('container');
+    const bg = document.getElementById('bg');
     const counts = { 'Minh': 0, 'Lỏ': 0, 'Skibidi': 0, 'Quá': 0 };
-    let wx = -2500 + window.innerWidth/2, wy = -2500 + window.innerHeight/2;
-    let nPressed = 0, gameFinished = false;
+    let gameFinished = false, nPressed = 0;
 
-    // Cập nhật vị trí thế giới
-    function updateWorld() {
-        world.style.left = wx + 'px';
-        world.style.top = wy + 'px';
+    // Cập nhật vị trí nền và các vật thể
+    function draw() {
+        // Nền trôi ngược lại để tạo cảm giác di chuyển
+        bg.style.backgroundPosition = `${-posX}px ${-posY}px`;
+        container.style.transform = `translate(${-posX}px, ${-posY}px)`;
         checkCollision();
     }
-    updateWorld();
 
     // Sinh bản sao mỗi 1 giây
     setInterval(() => {
@@ -68,100 +81,86 @@
         const ghost = document.createElement('div');
         ghost.className = 'ghost';
         ghost.innerText = 'Minh Lỏ';
-        // Đặt bản sao tại vị trí người chơi đang đứng trong thế giới
-        ghost.style.left = (Math.abs(wx) + window.innerWidth/2 - 35) + 'px';
-        ghost.style.top = (Math.abs(wy) + window.innerHeight/2 - 35) + 'px';
-        world.appendChild(ghost);
+        // Đặt bản sao tại đúng tọa độ ảo hiện tại (cộng thêm 50% màn hình để vào giữa)
+        ghost.style.left = (posX + window.innerWidth/2) + 'px';
+        ghost.style.top = (posY + window.innerHeight/2) + 'px';
+        container.appendChild(ghost);
     }, 1000);
 
-    // Tạo mảnh nhặt rải rác trong thế giới
+    // Tạo vật phẩm ngẫu nhiên
     const words = ['Minh', 'Lỏ', 'Skibidi', 'Quá'];
     words.forEach(word => {
         for(let i=0; i<10; i++) {
-            const el = document.createElement('div');
-            el.className = 'item';
-            el.innerText = word;
-            el.style.color = `hsl(${Math.random()*360}, 100%, 70%)`;
-            el.style.left = (2000 + Math.random() * 1000) + 'px';
-            el.style.top = (2000 + Math.random() * 1000) + 'px';
-            world.appendChild(el);
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.innerText = word;
+            item.style.color = `hsl(${Math.random()*360}, 100%, 70%)`;
+            item.style.left = (Math.random() * 4000 - 2000) + 'px';
+            item.style.top = (Math.random() * 4000 - 2000) + 'px';
+            container.appendChild(item);
         }
     });
 
     function move(dx, dy) {
-        if (gameFinished) return;
-        wx -= dx; wy -= dy;
-        updateWorld();
+        if(gameFinished) return;
+        posX += dx;
+        posY += dy;
+        draw();
     }
 
     // Điều khiển
-    window.addEventListener('keydown', (e) => {
-        const s = 25;
-        if (e.key === 'ArrowUp' || e.key === 'w') move(0, -s);
-        if (e.key === 'ArrowDown' || e.key === 's') move(0, s);
-        if (e.key === 'ArrowLeft' || e.key === 'a') move(-s, 0);
-        if (e.key === 'ArrowRight' || e.key === 'd') move(s, 0);
-        if (e.key.toLowerCase() === 'n') handleN();
+    const speed = 30;
+    window.addEventListener('keydown', e => {
+        if(e.key === 'w' || e.key === 'ArrowUp') move(0, -speed);
+        if(e.key === 's' || e.key === 'ArrowDown') move(0, speed);
+        if(e.key === 'a' || e.key === 'ArrowLeft') move(-speed, 0);
+        if(e.key === 'd' || e.key === 'ArrowRight') move(speed, 0);
     });
 
     const setupBtn = (id, dx, dy) => {
         const btn = document.getElementById(id);
-        let timer;
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); timer = setInterval(() => move(dx, dy), 50); });
-        btn.addEventListener('touchend', () => clearInterval(timer));
+        let interval;
+        const start = () => interval = setInterval(() => move(dx, dy), 50);
+        const stop = () => clearInterval(interval);
+        btn.onmousedown = start; btn.onmouseup = stop;
+        btn.ontouchstart = e => { e.preventDefault(); start(); };
+        btn.ontouchend = stop;
     };
     setupBtn('up', 0, -20); setupBtn('down', 0, 20); setupBtn('left', -20, 0); setupBtn('right', 20, 0);
 
     function checkCollision() {
         const items = document.querySelectorAll('.item');
-        const px = Math.abs(wx) + window.innerWidth/2;
-        const py = Math.abs(wy) + window.innerHeight/2;
+        // Tọa độ thực tế của người chơi trong Container
+        const px = posX + window.innerWidth/2;
+        const py = posY + window.innerHeight/2;
 
         items.forEach(item => {
             const ix = parseFloat(item.style.left);
             const iy = parseFloat(item.style.top);
-            const dist = Math.sqrt((px-ix)**2 + (py-iy)**2);
-            
-            if (dist < 50) {
-                const txt = item.innerText;
-                counts[txt]++;
+            const d = Math.sqrt((px-ix)**2 + (py-iy)**2);
+            if(d < 50) {
+                const t = item.innerText;
+                counts[t]++;
                 document.getElementById('c1').innerText = counts['Minh'];
                 document.getElementById('c2').innerText = counts['Lỏ'];
                 document.getElementById('c3').innerText = counts['Skibidi'];
                 document.getElementById('c4').innerText = counts['Quá'];
                 item.remove();
-                if (Object.values(counts).every(v => v >= 10)) {
+                if(Object.values(counts).every(v => v >= 10)) {
                     gameFinished = true;
-                    document.getElementById('message').style.display = 'block';
-                    document.getElementById('message').innerText = "NHIỆM VỤ XONG! ẤN N 10 LẦN";
-                    btnN.style.display = 'flex';
+                    document.getElementById('btn-n').style.display = 'flex';
                 }
             }
         });
     }
 
-    function handleN() {
-        if (!gameFinished || nPressed >= 10) return;
+    document.getElementById('btn-n').onclick = () => {
         nPressed++;
-        document.getElementById('message').innerText = `KẾT HỢP: ${nPressed}/10`;
-        if (nPressed === 10) {
-            document.getElementById('message').innerHTML = "<h1 style='color:lime'>CHÚC MỪNG MINH LỎ!</h1>";
-            btnN.style.display = 'none';
-            for (let i = 0; i < 15; i++) setTimeout(createFirework, i * 200);
+        if(nPressed >= 10) {
+            alert("CHÚC MỪNG MINH LỎ!");
+            location.reload();
         }
-    }
-
-    function createFirework() {
-        const fw = document.createElement('div');
-        fw.className = 'firework'; fw.innerText = 'MINH LỎ SKIBIDI QUÁ';
-        fw.style.left = Math.random() * window.innerWidth + 'px';
-        fw.style.top = Math.random() * window.innerHeight + 'px';
-        fw.style.setProperty('--x', (Math.random() - 0.5) * 500 + 'px');
-        fw.style.setProperty('--y', (Math.random() - 0.5) * 500 + 'px');
-        fw.style.color = `hsl(${Math.random()*360}, 100%, 50%)`;
-        document.body.appendChild(fw);
-        setTimeout(() => fw.remove(), 1000);
-    }
+    };
 </script>
 </body>
 </html>
