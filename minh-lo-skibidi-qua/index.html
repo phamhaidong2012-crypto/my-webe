@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trân Ngu Tank - 1000% Full Code</title>
+    <title>Trân Ngu Tank - 1000% Fix Skills</title>
     <style>
         body { margin: 0; overflow: hidden; background: #999; font-family: sans-serif; touch-action: none; color: white; user-select: none; }
         .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; background: #aaa; }
@@ -28,10 +28,10 @@
         /* Game UI */
         #controls { position: fixed; bottom: 20px; left: 20px; display: none; grid-template-columns: repeat(3, 65px); gap: 8px; z-index: 500; }
         #action-buttons { position: fixed; bottom: 20px; right: 20px; display: none; flex-direction: column; gap: 10px; z-index: 500; align-items: center; }
-        .joy-btn { width: 65px; height: 65px; background: rgba(255,255,255,0.7); border: 3px solid black; color: black; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
-        .fire-btn { width: 80px; height: 80px; background: red; border-radius: 50%; border: 4px solid white; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
-        .skill-btn { width: 65px; height: 65px; background: orange; border-radius: 50%; border: 3px solid white; color: white; font-size: 10px; display: flex; align-items: center; justify-content: center; text-align: center; position: relative; overflow: hidden; }
-        .cooldown-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); height: 0%; transition: height 0.1s linear; }
+        .joy-btn { width: 65px; height: 65px; background: rgba(255,255,255,0.7); border: 3px solid black; color: black; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 10px; touch-action: none; }
+        .fire-btn { width: 80px; height: 80px; background: red; border-radius: 50%; border: 4px solid white; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; touch-action: none; }
+        .skill-btn { width: 65px; height: 65px; background: orange; border-radius: 50%; border: 3px solid white; color: white; font-size: 10px; display: flex; align-items: center; justify-content: center; text-align: center; position: relative; overflow: hidden; touch-action: none; cursor: pointer; }
+        .cooldown-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); height: 0%; pointer-events: none; }
 
         canvas { display: none; background: #1a1a1a; }
         #game-ui { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; pointer-events: none; display:none; width: 90%; text-align: center; }
@@ -61,7 +61,7 @@
     <p id="pop-desc" style="font-size:11px; text-align:center"></p>
     <div style="font-weight:bold">GIÁ: <span id="pop-price">0</span> Xu</div>
     <button id="pop-buy-btn" class="buy-btn">XÁC NHẬN MUA</button>
-    <button onclick="closePopup()" style="margin-top:5px; border:none; background:none; text-decoration:underline;">Đóng</button>
+    <button onclick="closePopup()" style="margin-top:5px; border:none; background:none; text-decoration:underline; cursor:pointer;">Đóng</button>
 </div>
 
 <div id="color-menu" class="screen">
@@ -76,11 +76,11 @@
 </div>
 
 <div id="controls">
-    <div></div><div class="joy-btn" onpointerdown="moveDir='up'" onpointerup="moveDir=null">↑</div><div></div>
-    <div class="joy-btn" onpointerdown="moveDir='left'" onpointerup="moveDir=null">←</div><div class="joy-btn" onpointerdown="moveDir='down'" onpointerup="moveDir=null">↓</div><div class="joy-btn" onpointerdown="moveDir='right'" onpointerup="moveDir=null">→</div>
+    <div></div><div class="joy-btn" onpointerdown="moveDir='up'" onpointerup="moveDir=null" onpointerleave="moveDir=null">↑</div><div></div>
+    <div class="joy-btn" onpointerdown="moveDir='left'" onpointerup="moveDir=null" onpointerleave="moveDir=null">←</div><div class="joy-btn" onpointerdown="moveDir='down'" onpointerup="moveDir=null" onpointerleave="moveDir=null">↓</div><div class="joy-btn" onpointerdown="moveDir='right'" onpointerup="moveDir=null" onpointerleave="moveDir=null">→</div>
 </div>
 <div id="action-buttons">
-    <div class="fire-btn" onpointerdown="fireBullet()">BẮN</div>
+    <div class="fire-btn" onclick="fireBullet()">BẮN</div>
     <div id="skill-btns-container"></div>
 </div>
 
@@ -93,9 +93,9 @@
 
 <script>
     let coins = 2000, currentSkills = [], ownedSkills = [], tankColor = "hsl(0, 50%, 50%)", moveDir = null;
-    let player = { x: 80, y: 80, a: 0, hp: 100, bullets: [], cd: {} };
-    let boss = { x: 500, y: 300, hp: 500, active: true, locked: false };
-    let walls = [{x:150, y:0, w:30, h:200}, {x:0, y:300, w:300, h:30}];
+    let player = { x: 100, y: 100, a: 0, hp: 100, bullets: [], cd: {} };
+    let boss = { x: 600, y: 400, hp: 500, active: true, locked: false };
+    let walls = [{x:250, y:0, w:40, h:300}, {x:0, y:450, w:500, h:40}];
 
     const skillsData = [
         { id: 's1', n: '5 VIÊN', t: 0, p: 10, cd: 3000, d: 'Bắn 5 viên liên tục.' },
@@ -117,26 +117,23 @@
         if(id !== 'none') document.getElementById(id).style.display = 'flex';
     }
 
-    // Video minh họa cho từng chiêu
     function playSkillVideo(id) {
         const vid = document.getElementById('video-preview');
         vid.innerHTML = '';
-        const tank = '<div style="position:absolute;left:20px;top:60px;width:20px;height:15px;background:white;border:1px solid red"></div>';
         if(id === 's1') {
-            vid.innerHTML = tank;
+            vid.innerHTML = '<div style="position:absolute;left:20px;top:60px;width:20px;height:15px;background:white;border:1px solid red"></div>';
             for(let i=0; i<5; i++) {
                 setTimeout(() => {
                     let b = document.createElement('div');
-                    b.style.cssText = `position:absolute;left:40px;top:65px;width:5px;height:5px;background:yellow;border-radius:50%;transition:all 0.5s;`;
-                    vid.appendChild(b); setTimeout(() => b.style.left = '200px', 10);
-                }, i*200);
+                    b.style.cssText = `position:absolute;left:40px;top:65px;width:5px;height:5px;background:yellow;border-radius:50%;`;
+                    vid.appendChild(b);
+                    let bx = 40; let ani = setInterval(() => { bx+=5; b.style.left = bx+'px'; if(bx>230){b.remove();clearInterval(ani)}}, 20);
+                }, i*150);
             }
-        } else if(id === 's4') {
-            vid.innerHTML = tank + '<div style="position:absolute;left:40px;top:66px;width:0;height:3px;background:cyan;transition:width 0.5s;" id="l-anim"></div>';
-            setTimeout(() => document.getElementById('l-anim').style.width = '180px', 100);
-        } else {
-            vid.innerHTML = '<p style="text-align:center;margin-top:50px">Preview kỹ năng ' + id + '</p>';
-        }
+        } else if(id === 's10') {
+            vid.innerHTML = '<div style="position:absolute;left:50%;top:50%;width:40px;height:40px;background:cyan;opacity:0.5;border-radius:50%;transform:translate(-50%,-50%) scale(0);" id="ice-v"></div>';
+            setTimeout(() => document.getElementById('ice-v').style.transform = 'translate(-50%,-50%) scale(3)', 100);
+        } else { vid.innerHTML = `<p style='text-align:center;margin-top:50px'>Preview ${id}</p>`; }
     }
 
     function openPopup(skill) {
@@ -145,7 +142,6 @@
         document.getElementById('pop-desc').innerText = skill.d;
         document.getElementById('pop-price').innerText = skill.p;
         playSkillVideo(skill.id);
-
         const btn = document.getElementById('pop-buy-btn');
         if(ownedSkills.includes(skill.id)) {
             btn.innerText = currentSkills.includes(skill.id) ? "ĐANG LẮP" : "TRANG BỊ";
@@ -158,12 +154,9 @@
         } else {
             btn.innerText = "XÁC NHẬN MUA";
             btn.className = coins >= skill.p ? "buy-btn btn-green" : "buy-btn btn-red";
-            btn.onclick = () => {
-                if(coins >= skill.p) { coins -= skill.p; ownedSkills.push(skill.id); renderSkills(); openPopup(skill); }
-            };
+            btn.onclick = () => { if(coins >= skill.p) { coins -= skill.p; ownedSkills.push(skill.id); renderSkills(); openPopup(skill); } };
         }
     }
-
     function closePopup() { document.getElementById('skill-popup').style.display = 'none'; }
 
     function renderSkills() {
@@ -171,8 +164,7 @@
         skillsData.forEach(s => {
             let div = document.createElement('div');
             div.className = `skill-slot tier-${s.t} ${currentSkills.includes(s.id)?'selected':''} ${ownedSkills.includes(s.id)?'owned':''}`;
-            div.innerHTML = s.n;
-            div.onclick = () => openPopup(s);
+            div.innerHTML = s.n; div.onclick = () => openPopup(s);
             grid.appendChild(div);
         });
         document.getElementById('coin-txt').innerText = coins;
@@ -184,14 +176,15 @@
     }
 
     function triggerSkill(id, btn) {
+        if(player.cd[id]) return;
         let s = skillsData.find(x => x.id === id);
-        if(player.cd[id]) return; // Đang hồi chiêu
-
-        // Thực hiện chiêu
+        
+        // Thực thi chiêu
         if(id === 's1') { let c=0; let i=setInterval(()=>{fireBullet();c++;if(c>=5)clearInterval(i)},100); }
         if(id === 's10') { boss.locked = true; setTimeout(()=>boss.locked=false, 5000); }
-        
-        // Cooldown hiệu ứng
+        if(id === 's8') { player.hp = Math.min(100, player.hp + 30); }
+
+        // Cooldown
         if(s.cd > 0) {
             player.cd[id] = true;
             let overlay = btn.querySelector('.cooldown-overlay');
@@ -200,20 +193,15 @@
             let timer = setInterval(() => {
                 let elapsed = Date.now() - start;
                 overlay.style.height = (100 - (elapsed/s.cd)*100) + '%';
-                if(elapsed >= s.cd) {
-                    clearInterval(timer);
-                    player.cd[id] = false;
-                    overlay.style.height = '0%';
-                }
-            }, 100);
+                if(elapsed >= s.cd) { clearInterval(timer); player.cd[id] = false; overlay.style.height = '0%'; }
+            }, 50);
         }
     }
 
     function startGame() {
         showScreen('none');
         const cvs = document.getElementById('gameCanvas');
-        cvs.style.display = 'block';
-        cvs.width = window.innerWidth; cvs.height = window.innerHeight;
+        cvs.style.display = 'block'; cvs.width = window.innerWidth; cvs.height = window.innerHeight;
         document.getElementById('controls').style.display = 'grid';
         document.getElementById('action-buttons').style.display = 'flex';
         document.getElementById('game-ui').style.display = 'block';
@@ -223,9 +211,8 @@
         currentSkills.forEach(id => {
             let s = skillsData.find(x => x.id === id);
             let b = document.createElement('div');
-            b.className = 'skill-btn';
-            b.innerHTML = `${s.n}<div class="cooldown-overlay"></div>`;
-            b.onclick = () => triggerSkill(id, b);
+            b.className = 'skill-btn'; b.innerHTML = `${s.n}<div class="cooldown-overlay"></div>`;
+            b.onclick = (e) => { e.preventDefault(); triggerSkill(id, b); };
             container.appendChild(b);
         });
         requestAnimationFrame(loop);
@@ -235,31 +222,25 @@
         const ctx = document.getElementById('gameCanvas').getContext('2d');
         ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0,0,window.innerWidth, window.innerHeight);
 
-        // Di chuyển
         if(moveDir === 'up') { player.y -= 4; player.a = -Math.PI/2; }
         if(moveDir === 'down') { player.y += 4; player.a = Math.PI/2; }
         if(moveDir === 'left') { player.x -= 4; player.a = Math.PI; }
         if(moveDir === 'right') { player.x += 4; player.a = 0; }
 
-        // Vẽ tường
-        ctx.fillStyle = "#444";
-        walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+        ctx.fillStyle = "#444"; walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-        // Vẽ Boss
         if(boss.active) {
-            ctx.fillStyle = boss.locked ? "blue" : "red";
+            ctx.fillStyle = boss.locked ? "cyan" : "red";
             ctx.fillRect(boss.x-30, boss.y-30, 60, 60);
-            if(!boss.locked) { boss.x += (player.x - boss.x) * 0.005; boss.y += (player.y - boss.y) * 0.005; }
+            if(!boss.locked) { boss.x += (player.x - boss.x) * 0.006; boss.y += (player.y - boss.y) * 0.006; }
         }
 
-        // Vẽ Đạn
         player.bullets.forEach((b, i) => {
             b.x += b.vx; b.y += b.vy;
             ctx.fillStyle = "yellow"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, 7); ctx.fill();
             if(Math.hypot(b.x-boss.x, b.y-boss.y) < 30) { boss.hp -= 10; player.bullets.splice(i,1); }
         });
 
-        // Vẽ Xe
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
         ctx.fillStyle = tankColor; ctx.fillRect(-20, -15, 40, 30);
         ctx.fillStyle = "black"; ctx.fillRect(10, -4, 15, 8);
@@ -270,7 +251,6 @@
         requestAnimationFrame(loop);
     }
 
-    // Color Slider
     ['h','s','b'].forEach(k => {
         document.getElementById(k+'-range').oninput = () => {
             let h = document.getElementById('h-range').value, s = document.getElementById('s-range').value, b = document.getElementById('b-range').value;
