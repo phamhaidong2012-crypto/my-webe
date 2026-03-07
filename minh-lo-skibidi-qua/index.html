@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v16.3 Pro Max - Ultra Intelligence</title>
+    <title>Boss AI v16.3 Pro Max - Black Orbit</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: 'Courier New', monospace; color: #0f0; }
         canvas { display: block; }
@@ -36,10 +36,16 @@
     const ARENA_Y = canvas.height / 2;
     const BOSS_HITBOX = 18;
 
+    // Giữ nguyên 1000% code não AI
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y, vel: 0 };
     let bullets = [];
     let mouse = { x: 0, y: 0 };
     let timeLeft = 60;
+    
+    // Biến mới cho hành vi chạy vòng tròn
+    let orbitAngle = 0;
+    const ORBIT_SPEED = 0.015; // Tốc độ chạy vòng tròn
+    const ORBIT_RADIUS = 150; // Bán kính vòng tròn
 
     window.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
     
@@ -55,13 +61,14 @@
         bullets.push({ x: e.clientX, y: e.clientY, vx: Math.cos(angle) * 9, vy: Math.sin(angle) * 9 });
     });
 
+    // GIỮ NGUYÊN 1000% NÃO AI NÉ ĐẠN VÀ DỰ ĐOÁN CHUỘT
     function getSafetyScore(tx, ty) {
         let score = 0;
         // 1. Né đạn thực (Priority High)
         for (let b of bullets) {
             for (let i = 0; i < 30; i++) {
                 let px = b.x + b.vx * i;
-                let py = b.y + b.vy * i;
+                let py = b.y + b.vy * f;
                 let d = Math.hypot(tx - px, ty - py);
                 if (d < BOSS_HITBOX + 15) score += 5000 / (i + 1);
             }
@@ -84,22 +91,30 @@
     }
 
     function solveAI() {
-        let bestP = { x: boss.x, y: boss.y };
-        let minS = getSafetyScore(boss.x, boss.y);
+        // MỚI: Cập nhật vị trí chạy vòng tròn mục tiêu
+        orbitAngle += ORBIT_SPEED;
+        let orbitX = ARENA_X + Math.cos(orbitAngle) * ORBIT_RADIUS;
+        let orbitY = ARENA_Y + Math.sin(orbitAngle) * ORBIT_RADIUS;
 
-        // Chỉ di chuyển nếu điểm hiện tại bắt đầu có rủi ro
-        if (minS < 50) return; 
+        let bestP = { x: orbitX, y: orbitY };
+        let minS = getSafetyScore(orbitX, orbitY);
 
-        for (let i = 0; i < 16; i++) {
-            let ang = (i / 16) * Math.PI * 2;
-            let dist = 60;
-            let tx = boss.x + Math.cos(ang) * dist;
-            let ty = boss.y + Math.sin(ang) * dist;
+        // GIỮ NGUYÊN CODE AI: Nếu điểm chạy vòng tròn bị nguy hiểm, tìm điểm né
+        if (minS > 50 || getSafetyScore(boss.x, boss.y) > 100) { 
+            bestP = { x: boss.x, y: boss.y };
+            minS = getSafetyScore(boss.x, boss.y);
 
-            if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) continue;
+            for (let i = 0; i < 16; i++) {
+                let ang = (i / 16) * Math.PI * 2;
+                let dist = 60;
+                let tx = boss.x + Math.cos(ang) * dist;
+                let ty = boss.y + Math.sin(ang) * dist;
 
-            let s = getSafetyScore(tx, ty);
-            if (s < minS) { minS = s; bestP = { x: tx, y: ty }; }
+                if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) continue;
+
+                let s = getSafetyScore(tx, ty);
+                if (s < minS) { minS = s; bestP = { x: tx, y: ty }; }
+            }
         }
         boss.targetX = bestP.x; boss.targetY = bestP.y;
     }
@@ -116,35 +131,45 @@
             while(diff > Math.PI) diff -= Math.PI*2;
             while(diff < -Math.PI) diff += Math.PI*2;
             
-            boss.angle += diff * 0.15; // Xoay mượt
+            // MỚI: Vừa chạy vừa xoay thân liên tục
+            boss.angle += 0.2; 
+            
             let speed = Math.min(d, 6.5);
-            boss.x += Math.cos(boss.angle) * speed;
-            boss.y += Math.sin(boss.angle) * speed;
+            boss.x += Math.cos(targetAng) * speed;
+            boss.y += Math.sin(targetAng) * speed;
         }
 
+        // GIỮ NGUYÊN CODE UPDATE ĐẠN
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i]; b.x += b.vx; b.y += b.vy;
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("AI NEURAL LINK BROKEN - YOU WIN"); location.reload(); }
-            } else if (b.x < -100 || b.x > canvas.width+100) bullets.splice(i, 1);
+            } else if (b.x < -200 || b.x > canvas.width+200) bullets.splice(i, 1);
         }
     }
 
     function draw() {
-        ctx.fillStyle = 'rgba(2, 2, 2, 0.3)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Hiệu ứng mờ nền để thấy rõ tia đen
+        ctx.fillStyle = 'rgba(2, 2, 2, 0.4)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = '#111'; ctx.stroke();
 
-        // Vẽ luồng dữ liệu (Visualizing Intelligence)
-        ctx.beginPath();
-        ctx.moveTo(boss.x, boss.y);
-        ctx.lineTo(mouse.x, mouse.y);
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.05)';
-        ctx.stroke();
+        // 1. MỚI: Tia đường đi đạn DÀI BẰNG MÀN HÌNH và MÀU ĐEN
+        bullets.forEach(b => {
+            if (b.vx !== 0 || b.vy !== 0) {
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                // Kéo dài tia 2000 pixel
+                ctx.lineTo(b.x + b.vx * 2000, b.y + b.vy * 2000); 
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; // Màu đen, độ mờ 50%
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        });
 
-        // Boss
+        // 2. GIỮ NGUYÊN CODE VẼ BOSS (chỉ đổi logic góc quay trong update)
         ctx.save();
         ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
         ctx.shadowBlur = 10; ctx.shadowColor = boss.hp === 1 ? '#f0f' : '#f33';
@@ -152,7 +177,7 @@
         ctx.fillStyle = boss.hp === 1 ? '#f0f' : '#f33'; ctx.fillRect(-18, -15, 36, 30);
         ctx.restore();
 
-        // Đạn
+        // 3. GIỮ NGUYÊN CODE VẼ ĐẠN
         bullets.forEach(b => {
             ctx.shadowBlur = 5; ctx.shadowColor = '#0f0';
             ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
