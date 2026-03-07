@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI - Full Body Safety</title>
+    <title>Boss AI v4 - Ultimate Tank</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 12px; color: #0ff;">HỆ THỐNG TÍNH TOÁN DIỆN TÍCH THÂN XE...</div>
+    <div id="status" style="font-size: 12px; color: #0ff;">HỆ THỐNG PHÂN TÍCH QUY ĐẠO TIA...</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -30,7 +30,7 @@
     const ARENA_RADIUS = 225;
     const ARENA_X = canvas.width / 2;
     const ARENA_Y = canvas.height / 2;
-    const BOSS_SIZE = 44; // Kích thước bao quát của xe
+    const BOSS_RAD = 22; // Bán kính bao quát thân xe
 
     let boss = { 
         x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, 
@@ -47,75 +47,84 @@
             const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
             bullets.push({ 
                 x: e.clientX, y: e.clientY, 
-                vx: Math.cos(angle) * 8, vy: Math.sin(angle) * 8 
+                vx: Math.cos(angle) * 8.5, vy: Math.sin(angle) * 8.5 
             });
-            // Tính toán lại ngay khi có đạn mới
-            calculateBestEscape(); 
         }, 500);
     });
+
+    // Tính khoảng cách từ 1 điểm đến 1 đoạn thẳng (quỹ đạo đạn)
+    function distPointToLine(px, py, x1, y1, vx, vy) {
+        const dx = vx; const dy = vy;
+        const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+        if (t < 0) return Math.hypot(px - x1, py - y1);
+        return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
 
     function calculateBestEscape() {
         let bestPoint = { x: boss.x, y: boss.y };
         let minDanger = Infinity;
 
-        // Quét lưới các điểm trong Arena
-        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
-            for (let dist = 0; dist < ARENA_RADIUS - 30; dist += 40) {
-                let testX = ARENA_X + Math.cos(angle) * dist;
-                let testY = ARENA_Y + Math.sin(angle) * dist;
+        // Quét các điểm trong Arena để tìm chỗ an toàn nhất
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+            for (let d = 0; d < ARENA_RADIUS - 25; d += 45) {
+                let testX = ARENA_X + Math.cos(a) * d;
+                let testY = ARENA_Y + Math.sin(a) * d;
 
-                let totalDanger = 0;
-                
+                let dangerScore = 0;
                 bullets.forEach(b => {
-                    // Dự đoán quỹ đạo đạn trong 150 frame tới
-                    for (let t = 0; t <= 150; t += 15) {
-                        let fbx = b.x + b.vx * t;
-                        let fby = b.y + b.vy * t;
-                        
-                        // Tính khoảng cách từ đạn tới điểm test
-                        let d = Math.hypot(testX - fbx, testY - fby);
-                        
-                        // Nếu đạn đi vào vùng diện tích của xe (có bù thêm buffer 15px)
-                        if (d < (BOSS_SIZE / 2) + 15) {
-                            totalDanger += (150 - t); 
-                        }
+                    // Khoảng cách từ điểm test tới quỹ đạo bay của đạn
+                    let dPath = distPointToLine(testX, testY, b.x, b.y, b.vx, b.vy);
+                    
+                    // Nếu đạn nhắm thẳng vào điểm này (dưới 45px)
+                    if (dPath < 45) {
+                        let distToBullet = Math.hypot(testX - b.x, testY - b.y);
+                        // Càng gần đạn càng nguy hiểm
+                        dangerScore += (1000 / (distToBullet + 1));
                     }
                 });
 
-                // Ưu tiên các điểm gần vị trí hiện tại nếu độ nguy hiểm bằng nhau
-                let distToCurrent = Math.hypot(testX - boss.x, testY - boss.y);
-                let score = totalDanger * 1000 + distToCurrent;
+                // Ưu tiên điểm gần Boss nhất nếu cùng độ an toàn để tránh di chuyển thừa
+                let distFromBoss = Math.hypot(testX - boss.x, testY - boss.y);
+                let finalScore = dangerScore * 1000 + distFromBoss;
 
-                if (score < minDanger) {
-                    minDanger = score;
+                if (finalScore < minDanger) {
+                    minDanger = finalScore;
                     bestPoint = { x: testX, y: testY };
                 }
             }
         }
 
-        // Nếu điểm tốt nhất vẫn an toàn hơn vị trí hiện tại đáng kể
-        boss.targetX = bestPoint.x;
-        boss.targetY = bestPoint.y;
-        boss.isMoving = true;
+        // Chỉ cập nhật mục tiêu nếu vị trí hiện tại thực sự nguy hiểm
+        let currentDanger = 0;
+        bullets.forEach(b => {
+            if (distPointToLine(boss.x, boss.y, b.x, b.y, b.vx, b.vy) < 45) currentDanger++;
+        });
+
+        if (currentDanger > 0 || minDanger < Infinity) {
+            boss.targetX = bestPoint.x;
+            boss.targetY = bestPoint.y;
+            boss.isMoving = true;
+        }
     }
 
     function update() {
+        calculateBestEscape(); // Cập nhật liên tục để né chính xác
+
         if (boss.isMoving) {
             const dx = boss.targetX - boss.x;
             const dy = boss.targetY - boss.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 3) {
+            if (dist > 2) {
                 const targetAngle = Math.atan2(dy, dx);
                 let diff = targetAngle - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 
-                boss.angle += diff * 0.15;
+                boss.angle += diff * 0.15; // Xoay mượt
 
-                // Tiến/Lùi kết hợp để đến đích nhanh nhất
-                let moveSpeed = 5;
-                if (Math.abs(diff) > Math.PI / 2) moveSpeed = -5;
+                let moveSpeed = 5.5;
+                if (Math.abs(diff) > Math.PI / 2) moveSpeed = -5.5; // Lùi xe
                 
                 boss.x += Math.cos(boss.angle) * moveSpeed;
                 boss.y += Math.sin(boss.angle) * moveSpeed;
@@ -128,12 +137,11 @@
             let b = bullets[i];
             b.x += b.vx; b.y += b.vy;
             
-            // Va chạm chuẩn xác với thân xe
-            if (Math.hypot(b.x - boss.x, b.y - boss.y) < 22) {
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_RAD) {
                 boss.hp--;
                 hpTxt.innerText = boss.hp;
                 bullets.splice(i, 1);
-                if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
+                if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
                 continue;
             }
             if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
@@ -145,21 +153,13 @@
 
         // Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
-
-        // Vẽ vùng an toàn mục tiêu (Mờ)
-        if (boss.isMoving) {
-            ctx.beginPath();
-            ctx.arc(boss.targetX, boss.targetY, 22, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
-            ctx.fill();
-        }
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 1; ctx.stroke();
 
         // Vẽ Boss
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
-        ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
+        ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
         ctx.fillStyle = boss.hp === 1 ? '#ff00ff' : '#ff3333';
         ctx.fillRect(-18, -15, 36, 30);
         ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
