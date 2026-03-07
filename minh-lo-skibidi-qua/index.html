@@ -3,147 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI Ultra - Tank Physics</title>
+    <title>Boss Evolution AI - Overdrive</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #111; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 10px; left: 10px; color: white; pointer-events: none; font-size: 20px; text-shadow: 2px 2px 4px black; }
+        #ui { position: fixed; top: 15px; left: 15px; color: white; pointer-events: none; z-index: 10; }
+        .stat { font-size: 18px; margin-bottom: 5px; text-shadow: 2px 2px 4px #000; }
+        #mode { color: #ff0000; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
 
-<div id="ui">MÁU BOSS: <span id="hp">3</span></div>
+<div id="ui">
+    <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff4444; font-size: 24px;">3</span></div>
+    <div id="mode" class="stat">OVERDRIVE: TÍNH TOÁN TỐI ĐA!</div>
+</div>
 <canvas id="gameCanvas"></canvas>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const hpTxt = document.getElementById('hp');
+    const modeTxt = document.getElementById('mode');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const ARENA_RADIUS = 160;
+    let arenaRadius = 150;
     const ARENA_X = canvas.width / 2;
     const ARENA_Y = canvas.height / 2;
 
     let boss = { 
         x: ARENA_X, y: ARENA_Y, 
         angle: 0, 
-        speed: 0, 
-        rotSpeed: 0,
         hp: 3, 
-        radius: 20, // Bán kính va chạm của xe
-        color: '#ff4444'
+        radius: 22,
+        color: '#ff4444',
+        isOverdrive: false,
+        overdriveTimer: 0
     };
     
     let bullets = [];
 
     window.addEventListener('pointerdown', (e) => {
         const dist = Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y);
-        if (dist <= ARENA_RADIUS) return;
+        if (dist <= arenaRadius) return;
 
         setTimeout(() => {
             const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
             bullets.push({
                 x: e.clientX, y: e.clientY,
-                vx: Math.cos(angle) * 8.5,
-                vy: Math.sin(angle) * 8.5,
+                vx: Math.cos(angle) * 9,
+                vy: Math.sin(angle) * 9,
                 active: true
             });
         }, 500);
     });
 
     function getDistToLine(px, py, x1, y1, vx, vy) {
-        // Tính khoảng cách gần nhất từ Boss đến quỹ đạo viên đạn
         const dx = vx; const dy = vy;
         const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
-        if (t < 0) return Infinity; // Đạn chưa bay tới hoặc bay qua rồi
-        const nearestX = x1 + t * dx;
-        const nearestY = y1 + t * dy;
-        return Math.hypot(px - nearestX, py - nearestY);
+        if (t < 0) return Infinity;
+        return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
     }
 
-    function update() {
-        boss.speed *= 0.8; // Ma sát
-        boss.rotSpeed *= 0.7;
+    function update(dt) {
+        // 1. Vòng tròn tăng dần kích thước
+        arenaRadius += 0.05;
 
-        let bestDodgeMove = 0; // -1: lùi, 1: tiến
-        let bestDodgeTurn = 0; // -1: trái, 1: phải
+        // 2. Xử lý Overdrive (2 giây)
+        if (boss.overdriveTimer > 0) {
+            boss.overdriveTimer -= dt;
+            boss.isOverdrive = true;
+            modeTxt.style.display = 'block';
+            boss.color = '#fff'; // Chớp trắng khi overdrive
+        } else {
+            boss.isOverdrive = false;
+            modeTxt.style.display = 'none';
+            boss.color = boss.hp === 1 ? '#ff00ff' : '#ff4444';
+        }
+
+        // 3. AI né đạn
+        let move = 0; // 1: Tiến, -1: Lùi
+        let turn = 0;
         let dangerFound = false;
+
+        // Càng ít máu, tầm nhìn né đạn càng rộng và chính xác
+        const scanDist = boss.hp === 1 ? 300 : 200;
+        const safeMargin = boss.isOverdrive ? 35 : (boss.hp === 1 ? 40 : 50);
 
         bullets.forEach(b => {
             if (!b.active) return;
+            const dPath = getDistToLine(boss.x, boss.y, b.x, b.y, b.vx, b.vy);
+            const dBullet = Math.hypot(b.x - boss.x, b.y - boss.y);
 
-            // Kiểm tra xem đạn có đang nhắm vào mình không
-            const distToPath = getDistToLine(boss.x, boss.y, b.x, b.y, b.vx, b.vy);
-            const distToBullet = Math.hypot(b.x - boss.x, b.y - boss.y);
-
-            if (distToPath < 45 && distToBullet < 200) { 
+            if (dPath < safeMargin && dBullet < scanDist) {
                 dangerFound = true;
-                // AI tính toán hướng lách:
-                // Tìm vector vuông góc với hướng đạn
                 const perpX = -b.vy; const perpY = b.vx;
                 const side = (boss.x - b.x) * perpX + (boss.y - b.y) * perpY;
                 
-                // Quyết định tiến hay lùi dựa trên hướng xe hiện tại so với hướng cần né
                 const targetAngle = Math.atan2(perpY * (side > 0 ? 1 : -1), perpX * (side > 0 ? 1 : -1));
-                let angleDiff = targetAngle - boss.angle;
-                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                let diff = targetAngle - boss.angle;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
 
-                bestDodgeTurn = angleDiff > 0 ? 0.15 : -0.15;
-                bestDodgeMove = Math.abs(angleDiff) < Math.PI/2 ? 5 : -5;
+                // Thông minh hơn: Quyết định tiến hoặc lùi để né nhanh nhất
+                turn = diff > 0 ? 0.2 : -0.2;
+                if (Math.abs(diff) < Math.PI/2) move = boss.isOverdrive ? 7 : 5;
+                else move = boss.isOverdrive ? -7 : -5; // Thực hiện lùi xe
             }
         });
 
-        // Áp dụng AI vào cơ chế vật lý xe tăng (Tiến/Lùi/Xoay)
         if (dangerFound) {
-            boss.angle += bestDodgeTurn;
-            let nextX = boss.x + Math.cos(boss.angle) * bestDodgeMove;
-            let nextY = boss.y + Math.sin(boss.angle) * bestDodgeMove;
+            boss.angle += turn;
+            let nextX = boss.x + Math.cos(boss.angle) * move;
+            let nextY = boss.y + Math.sin(boss.angle) * move;
 
-            // Chặn không cho Boss ra khỏi vòng
-            if (Math.hypot(nextX - ARENA_X, nextY - ARENA_Y) < ARENA_RADIUS - 22) {
-                boss.x = nextX;
-                boss.y = nextY;
+            if (Math.hypot(nextX - ARENA_X, nextY - ARENA_Y) < arenaRadius - 25) {
+                boss.x = nextX; boss.y = nextY;
             }
         }
 
-        // Cập nhật đạn
+        // 4. Xử lý va chạm
         bullets.forEach((b, i) => {
             b.x += b.vx; b.y += b.vy;
             if (b.active && Math.hypot(b.x - boss.x, b.y - boss.y) < 22) {
-                boss.hp--; b.active = false;
-                hpTxt.innerText = Math.max(0, boss.hp);
-                if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
+                boss.hp--;
+                b.active = false;
+                hpTxt.innerText = boss.hp;
+                
+                // Kích hoạt Overdrive khi trúng đạn hoặc còn 1 máu
+                boss.overdriveTimer = 2000; 
+                
+                if (boss.hp <= 0) { alert("BẠN ĐÃ CHIẾN THẮNG!"); location.reload(); }
             }
-            if (b.x < -50 || b.x > canvas.width+50 || b.y < -50 || b.y > canvas.height+50) bullets.splice(i, 1);
+            if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
         });
     }
 
-    function draw() {
-        ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let lastTime = 0;
+    function draw(time) {
+        const dt = time - lastTime;
+        lastTime = time;
 
-        // Vẽ Arena
+        ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Vẽ Arena (Vòng tròn to dần)
         ctx.beginPath();
-        ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#555'; ctx.setLineDash([10, 10]); ctx.stroke();
+        ctx.arc(ARENA_X, ARENA_Y, arenaRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = boss.isOverdrive ? '#fff' : '#444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 10]);
+        ctx.stroke();
         ctx.setLineDash([]);
 
-        // Vẽ Boss (Xe tăng)
+        // Vẽ Boss
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
-        // Bánh xích
-        ctx.fillStyle = '#333';
+        
+        // Hiệu ứng hào quang khi ít máu
+        if (boss.hp === 1) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = boss.isOverdrive ? "white" : "magenta";
+        }
+
+        ctx.fillStyle = '#222'; // Bánh xích
         ctx.fillRect(-22, -22, 44, 10);
         ctx.fillRect(-22, 12, 44, 10);
-        // Thân
-        ctx.fillStyle = boss.color;
+        ctx.fillStyle = boss.color; // Thân xe
         ctx.fillRect(-18, -15, 36, 30);
-        // Nòng
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = '#000'; // Nòng
         ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
@@ -151,14 +181,14 @@
         ctx.fillStyle = '#0f0';
         bullets.forEach(b => {
             if (b.active) {
-                ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
             }
         });
 
-        update();
+        update(dt);
         requestAnimationFrame(draw);
     }
-    draw();
+    requestAnimationFrame(draw);
 </script>
 </body>
 </html>
