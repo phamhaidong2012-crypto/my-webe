@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v6 - Pure Efficiency</title>
+    <title>Boss AI v7 - Precision Threading</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #4f4;">PRIORITIZING REVERSE GEAR...</div>
+    <div style="font-size: 11px; color: #aaa;">THREADING MODE: ACTIVE</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -50,9 +50,9 @@
     }
 
     function findSafePath() {
-        // Chỉ tính toán nếu thực sự bị đe dọa
-        let isDangerous = bullets.some(b => distPointToLine(boss.x, boss.y, b) < 55);
-        if (!isDangerous) {
+        // Kiểm tra xem vị trí hiện tại có thực sự bị đạn đâm trúng không (hitbox 25px)
+        let isSafe = !bullets.some(b => distPointToLine(boss.x, boss.y, b) < 30);
+        if (isSafe) {
             boss.isMoving = false;
             return;
         }
@@ -60,22 +60,22 @@
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
 
-        // Quét lưới tìm điểm an toàn
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
-            for (let r = 20; r < 130; r += 35) {
+        // Boss quét tìm các "khe hở" nhỏ nhất có thể lách qua
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
+            for (let r = 15; r < 100; r += 20) {
                 let tx = boss.x + Math.cos(a) * r;
                 let ty = boss.y + Math.sin(a) * r;
 
-                if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) continue;
+                if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 22) continue;
 
                 let danger = 0;
                 bullets.forEach(b => {
                     let d = distPointToLine(tx, ty, b);
-                    if (d < 55) danger += (55 - d);
+                    if (d < 30) danger += (30 - d) * 5; // Phạt nặng nếu điểm này vẫn trúng đạn
                 });
 
-                // Ưu tiên điểm an toàn nhất, sau đó mới đến điểm gần nhất
-                let score = danger * 200 + Math.hypot(tx - boss.x, ty - boss.y);
+                // Ưu tiên điểm cực gần để lách xuyên qua thay vì chạy xa
+                let score = danger * 1000 + Math.hypot(tx - boss.x, ty - boss.y);
                 if (score < minScore) {
                     minScore = score;
                     bestPoint = { x: tx, y: ty };
@@ -95,7 +95,7 @@
             const dy = boss.targetY - boss.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 2) {
+            if (dist > 1.5) {
                 const angleToTarget = Math.atan2(dy, dx);
                 let diff = angleToTarget - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
@@ -104,17 +104,14 @@
                 let moveSpeed = 0;
                 let steerAmount = 0;
 
-                // LOGIC QUYẾT ĐỊNH TIẾN/LÙI TỐI ƯU
+                // THREADING LOGIC: Xoay trái/phải để tiến lên né xuyên qua nếu góc hẹp
                 if (Math.abs(diff) <= Math.PI / 2) {
-                    // Tiến là nhanh nhất
-                    steerAmount = diff * 0.2;
-                    moveSpeed = 6;
+                    steerAmount = diff * 0.25;
+                    moveSpeed = 6.5;
                 } else {
-                    // Lùi là nhanh nhất
-                    // Tính góc lệch cho số lùi (ngược 180 độ)
                     let reverseDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                    steerAmount = reverseDiff * 0.2;
-                    moveSpeed = -6;
+                    steerAmount = reverseDiff * 0.25;
+                    moveSpeed = -6.5;
                 }
 
                 boss.angle += steerAmount;
@@ -128,7 +125,7 @@
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             b.x += b.vx; b.y += b.vy;
-            if (Math.hypot(b.x - boss.x, b.y - boss.y) < 22) {
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < 20) {
                 boss.hp--; hpTxt.innerText = boss.hp;
                 bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
@@ -143,18 +140,15 @@
 
         // Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#222'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 1; ctx.stroke();
 
-        // Vẽ Quỹ đạo đạn
+        // Chỉ vẽ ĐƯỜNG KẺ quỹ đạo (Không màu đỏ)
+        ctx.lineWidth = 1;
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x + b.vx * 300, b.y + b.vy * 300);
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.1)';
-            ctx.lineWidth = 50; 
-            ctx.stroke();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
+            ctx.lineTo(b.x + b.vx * 350, b.y + b.vy * 350);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.stroke();
         });
 
@@ -170,7 +164,7 @@
 
         // Vẽ đạn
         ctx.fillStyle = '#0f0';
-        bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
+        bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
 
         update();
         requestAnimationFrame(draw);
