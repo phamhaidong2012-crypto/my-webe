@@ -3,28 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17.1 - Fixed Division</title>
+    <title>Boss AI v17.2 - Tower Defense Mode</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
-        .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; }
-        #timer { position: fixed; top: 15px; right: 15px; font-size: 35px; color: #f33; font-weight: 900; }
-        #announcement { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #ff3333; font-size: 40px; font-weight: 900; opacity: 0; pointer-events: none;
-            text-shadow: 0 0 20px #f00; transition: opacity 0.5s;
-        }
+        .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; margin-bottom: 5px; }
+        #player-ui { position: fixed; bottom: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V27 | PHASE: <span id="phase-txt">NORMAL</span></div>
+    <div style="font-size: 10px;">CORE: CORTEX-V27 | AUTO_COUNTER: ON</div>
 </div>
-<div id="timer">01:00</div>
-<div id="announcement">DIVIDING ARENA!</div>
+
+<div id="player-ui">
+    <div class="stat">TOWER HP: <span id="p-hp">3</span></div>
+    <div style="font-size: 10px;">RELOAD: <span id="timer-txt">0</span>s</div>
+</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -32,9 +30,8 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const hpTxt = document.getElementById('hp');
-    const timerTxt = document.getElementById('timer');
-    const phaseTxt = document.getElementById('phase-txt');
-    const announce = document.getElementById('announcement');
+    const pHpTxt = document.getElementById('p-hp');
+    const timerTxt = document.getElementById('timer-txt');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -45,28 +42,26 @@
     const BOSS_REAL_HITBOX = 5; 
     const SAFETY_BUFFER = 55;
 
+    // Vị trí tháp của người chơi
+    const TOWER = { x: canvas.width / 2, y: canvas.height - 50, size: 40 };
+
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
-    let bullets = [];
+    let playerHp = 3;
+    let bullets = [];      // Đạn của người chơi (Xanh lá)
+    let bossBullets = [];  // Đạn của Boss (Đỏ/Tím)
     let mouseX = 0, mouseY = 0;
-    let timeLeft = 60;
+    let gameTime = 0;
     let lastDecisionTime = 0;
     let isDivided = false;
 
-    const timerInterval = setInterval(() => {
-        timeLeft--;
-        timerTxt.innerText = `00:${timeLeft.toString().padStart(2, '0')}`;
+    // Vòng lặp thời gian thực thay thế đếm ngược
+    setInterval(() => {
+        gameTime++;
+        timerTxt.innerText = (30 - (gameTime % 30));
         
-        if (timeLeft === 30 && !isDivided) {
-            isDivided = true;
-            phaseTxt.innerText = "DIVIDED";
-            announce.style.opacity = 1;
-            setTimeout(() => announce.style.opacity = 0, 2000);
-            
-            // ÉP BOSS VỀ BÊN TRÁI NGAY LẬP TỨC
-            boss.targetX = ARENA_X - 100;
-        }
-
-        if (timeLeft <= 0) { clearInterval(timerInterval); alert("HẾT GIỜ! BOSS THẮNG"); location.reload(); }
+        // Cứ mỗi 30 giây kích hoạt chia sân và Boss bắn đạn
+        if (gameTime >= 30) isDivided = true;
+        if (gameTime % 30 === 0) bossShoot();
     }, 1000);
 
     window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
@@ -81,15 +76,21 @@
         });
     }
 
+    function bossShoot() {
+        const angle = Math.atan2(TOWER.y - boss.y, TOWER.x - boss.x);
+        bossBullets.push({
+            x: boss.x, y: boss.y,
+            vx: Math.cos(angle) * 6,
+            vy: Math.sin(angle) * 6
+        });
+    }
+
     window.addEventListener('pointerdown', (e) => { mouseX = e.clientX; mouseY = e.clientY; fireBullet(); });
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); fireBullet(); } });
 
     function getRiskAt(tx, ty) {
         let totalRisk = 0;
-        // Kiểm tra giới hạn Arena
         if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) return 1000000;
-        
-        // Kiểm tra tường: Sau 30s, bất kỳ điểm nào bên phải ARENA_X đều là vùng chết
         if (isDivided && tx > ARENA_X - 15) return 1000000;
 
         for (let b of bullets) {
@@ -97,7 +98,6 @@
             let num = Math.abs(dx * (b.y - ty) - (b.x - tx) * dy);
             let den = Math.sqrt(dx * dx + dy * dy);
             let distToPath = num / den;
-
             if (distToPath < SAFETY_BUFFER) {
                 let dot = (tx - b.x) * dx + (ty - b.y) * dy;
                 if (dot > -10) totalRisk += (SAFETY_BUFFER - distToPath) * 200;
@@ -108,14 +108,10 @@
 
     function solveAI() {
         const now = Date.now();
-        
-        // Nếu đang trong quá trình chia tách và boss còn ở bên phải, ép nó di chuyển trái
         if (isDivided && boss.x > ARENA_X - 20) {
-            boss.targetX = ARENA_X - 100;
-            boss.targetY = ARENA_Y;
+            boss.targetX = ARENA_X - 100; boss.targetY = ARENA_Y;
             return;
         }
-
         let currentDestRisk = getRiskAt(boss.targetX, boss.targetY);
         if (currentDestRisk < 500 && now - lastDecisionTime < 150) return;
 
@@ -126,19 +122,12 @@
             let ang = (i / 48) * Math.PI * 2;
             let tx = boss.x + Math.cos(ang) * 95;
             let ty = boss.y + Math.sin(ang) * 95;
-
             let score = getRiskAt(tx, ty);
-            score += Math.hypot(tx - (ARENA_X - 100), ty - ARENA_Y) * 0.5; // Ưu tiên đứng giữa nửa bên trái
-
-            if (score < bestScore) {
-                bestScore = score;
-                bestP = { x: tx, y: ty };
-            }
+            score += Math.hypot(tx - (isDivided ? ARENA_X - 100 : ARENA_X), ty - ARENA_Y) * 1.5;
+            if (score < bestScore) { bestScore = score; bestP = { x: tx, y: ty }; }
         }
-        
         if (Math.hypot(boss.targetX - bestP.x, boss.targetY - bestP.y) > 15) {
-            boss.targetX = bestP.x;
-            boss.targetY = bestP.y;
+            boss.targetX = bestP.x; boss.targetY = bestP.y;
             lastDecisionTime = now;
         }
     }
@@ -148,7 +137,6 @@
         let dx = boss.targetX - boss.x;
         let dy = boss.targetY - boss.y;
         let d = Math.hypot(dx, dy);
-
         if (d > 2) {
             let targetAngle = Math.atan2(dy, dx);
             let diff = targetAngle - boss.angle;
@@ -159,39 +147,48 @@
             boss.y += Math.sin(boss.angle) * 8.8;
         }
 
+        // Xử lý đạn người chơi
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             if (b.charge > 0) { b.charge--; if (b.charge <= 0) b.active = true; }
             if (b.active) { b.x += b.vx; b.y += b.vy; }
-
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
             } else if (b.x < -1000 || b.x > canvas.width+1000) bullets.splice(i, 1);
+        }
+
+        // Xử lý đạn Boss
+        for (let i = bossBullets.length - 1; i >= 0; i--) {
+            let b = bossBullets[i];
+            b.x += b.vx; b.y += b.vy;
+            if (Math.hypot(b.x - TOWER.x, b.y - TOWER.y) < TOWER.size/2) {
+                playerHp--; pHpTxt.innerText = playerHp; bossBullets.splice(i, 1);
+                if (playerHp <= 0) { alert("THÁP ĐÃ SỤP ĐỔ! BẠN THUA"); location.reload(); }
+            } else if (b.y > canvas.height + 100) bossBullets.splice(i, 1);
         }
     }
 
     function draw() {
         ctx.fillStyle = '#020202'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         
+        // Vẽ Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = isDivided ? '#ff3333' : '#111'; 
         ctx.lineWidth = 3; ctx.stroke();
 
         if (isDivided) {
-            ctx.beginPath();
-            ctx.moveTo(ARENA_X, ARENA_Y - ARENA_RADIUS);
-            ctx.lineTo(ARENA_X, ARENA_Y + ARENA_RADIUS);
-            ctx.strokeStyle = '#ff3333';
-            ctx.setLineDash([10, 5]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
-            ctx.beginPath();
-            ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, -Math.PI/2, Math.PI/2);
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(ARENA_X, ARENA_Y - ARENA_RADIUS); ctx.lineTo(ARENA_X, ARENA_Y + ARENA_RADIUS);
+            ctx.strokeStyle = '#ff3333'; ctx.setLineDash([10, 5]); ctx.stroke(); ctx.setLineDash([]);
         }
 
+        // Vẽ Tháp của người chơi
+        ctx.fillStyle = '#0f0';
+        ctx.shadowBlur = 15; ctx.shadowColor = '#0f0';
+        ctx.fillRect(TOWER.x - 20, TOWER.y - 20, 40, 40);
+        ctx.shadowBlur = 0;
+
+        // Vẽ đạn người chơi + tia xanh
         bullets.forEach(b => {
             ctx.beginPath(); ctx.moveTo(b.x, b.y);
             ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
@@ -200,18 +197,24 @@
                 ctx.beginPath(); ctx.arc(b.x, b.y, b.charge/2+5, 0, Math.PI*2);
                 ctx.strokeStyle = '#0f0'; ctx.stroke();
             }
+            ctx.fillStyle = b.active ? '#0f0' : '#333';
+            ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
         });
 
+        // Vẽ đạn Boss (Màu tím neon)
+        bossBullets.forEach(b => {
+            ctx.fillStyle = '#f0f';
+            ctx.shadowBlur = 10; ctx.shadowColor = '#f0f';
+            ctx.beginPath(); ctx.arc(b.x, b.y, 8, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // Vẽ Boss
         ctx.save();
         ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
         ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
         ctx.fillStyle = (boss.hp === 1) ? '#f0f' : '#f33'; ctx.fillRect(-18, -15, 36, 30);
         ctx.restore();
-
-        bullets.forEach(b => {
-            ctx.fillStyle = b.active ? '#0f0' : '#333';
-            ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
-        });
 
         update();
         requestAnimationFrame(draw);
