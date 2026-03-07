@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v14 - Future Predictor</title>
+    <title>Boss AI v15 - Tactical Patience</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #0ff;">PRECOGNITION 10X: ACTIVE</div>
+    <div style="font-size: 11px; color: #fb0;">BEHAVIOR: TACTICAL PATIENCE | DANGER > CENTER</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -43,14 +43,13 @@
         }, 500);
     });
 
-    // Hàm giả lập va chạm trong tương lai
     function checkFutureCollision(testX, testY, futureFrames) {
         for (let f = 1; f <= futureFrames; f++) {
             for (let b of bullets) {
-                // Dự đoán vị trí đạn sau f khung hình
                 let fbX = b.x + b.vx * f;
                 let fbY = b.y + b.vy * f;
-                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 5) return true;
+                // Vùng cấm rộng hơn để tạo khoảng cách an toàn
+                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 15) return true;
             }
         }
         return false;
@@ -60,24 +59,27 @@
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
 
-        // Boss "tua nhanh" các kịch bản trong đầu
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+        // Kiểm tra xem hiện tại có nguy hiểm không
+        let isCurrentlySafe = !checkFutureCollision(boss.x, boss.y, 25);
+        let bulletCount = bullets.length;
+
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
             for (let r = 0; r < ARENA_RADIUS - 20; r += 40) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
 
                 let score = 0;
+                let willCollide = checkFutureCollision(tx, ty, 30);
                 
-                // GIẢ LẬP TƯƠNG LAI: Nếu đứng ở đây trong 15 khung hình tới có chết không?
-                let willDie = checkFutureCollision(tx, ty, 15);
-                
-                if (willDie) {
-                    score += 100000;
+                if (willCollide) {
+                    score += 1000000; // Phạt cực nặng nếu đâm vào đạn
                 } else {
-                    // Nếu an toàn, tính thêm các yếu tố phụ
                     let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
                     let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
-                    score += distToCenter * 2 + distFromBoss;
+                    
+                    // Nếu đang có đạn, Boss coi trọng việc đứng yên ở chỗ an toàn hơn là chạy về tâm
+                    let centerWeight = (bulletCount > 0) ? 0.2 : 2.0; 
+                    score += distToCenter * centerWeight + distFromBoss;
                 }
 
                 if (score < minScore) {
@@ -85,6 +87,11 @@
                     bestPoint = { x: tx, y: ty };
                 }
             }
+        }
+
+        // Nếu vị trí hiện tại đã rất an toàn và đang có đạn, đừng ham di chuyển
+        if (isCurrentlySafe && bulletCount > 0 && Math.hypot(boss.x - bestPoint.x, boss.y - bestPoint.y) < 50) {
+            return; 
         }
 
         boss.targetX = bestPoint.x;
@@ -98,20 +105,20 @@
         const dy = boss.targetY - boss.y;
         const dist = Math.hypot(dx, dy);
 
-        if (dist > 1.5) {
+        if (dist > 1) {
             const angleToTarget = Math.atan2(dy, dx);
             let diff = angleToTarget - boss.angle;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
 
-            let moveSpeed = 7;
+            let moveSpeed = 6.5;
             if (Math.abs(diff) > Math.PI / 2) {
                 let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                boss.angle += revDiff * 0.3;
-                moveSpeed = -7;
+                boss.angle += revDiff * 0.25;
+                moveSpeed = -6.5;
             } else {
-                boss.angle += diff * 0.3;
-                moveSpeed = 7;
+                boss.angle += diff * 0.25;
+                moveSpeed = 6.5;
             }
 
             boss.x += Math.cos(boss.angle) * moveSpeed;
@@ -136,16 +143,14 @@
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
-        // Đường quỹ đạo neon
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
             ctx.lineTo(b.x + b.vx * 400, b.y + b.vy * 400);
-            ctx.strokeStyle = 'rgba(0, 255, 150, 0.15)';
+            ctx.strokeStyle = 'rgba(0, 255, 150, 0.1)';
             ctx.stroke();
         });
 
-        // Vẽ Boss
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
@@ -155,7 +160,6 @@
         ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
-        // Đạn
         ctx.fillStyle = '#0f0';
         bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
 
