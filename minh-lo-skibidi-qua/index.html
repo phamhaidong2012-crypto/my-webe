@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI Ultra - No Shake Tank</title>
+    <title>Boss AI - Future Prediction</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: fixed; top: 15px; left: 15px; color: white; pointer-events: none; z-index: 10; }
         .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
-        #status { color: #0ff; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div id="status">HỆ THỐNG ỔN ĐỊNH: SẴN SÀNG</div>
+    <div style="font-size: 12px; color: #0f0;">HỆ THỐNG DỰ BÁO QUỸ ĐẠO ĐANG CHẠY...</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -34,135 +33,135 @@
 
     let boss = { 
         x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, 
-        isOD: false, odTimer: 0,
-        lastDodgeSide: 1 // Lưu hướng né cuối để chống rung
+        targetX: ARENA_X, targetY: ARENA_Y,
+        isMoving: false
     };
     
     let bullets = [];
 
     window.addEventListener('pointerdown', (e) => {
         if (Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y) <= ARENA_RADIUS) return;
+        
+        // Giả lập 0.5s chuẩn bị của Boss khi người chơi nhấn
         setTimeout(() => {
             const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
-            bullets.push({ x: e.clientX, y: e.clientY, vx: Math.cos(angle) * 8.5, vy: Math.sin(angle) * 8.5 });
+            bullets.push({ 
+                x: e.clientX, y: e.clientY, 
+                vx: Math.cos(angle) * 8, vy: Math.sin(angle) * 8 
+            });
+            calculateBestEscape(); // Boss tính toán ngay khi đạn xuất hiện
         }, 500);
     });
 
-    function getDistToPath(px, py, b) {
-        const t = ((px - b.x) * b.vx + (py - b.y) * b.vy) / (b.vx**2 + b.vy**2);
-        if (t < 0) return Infinity;
-        return Math.hypot(px - (b.x + t * b.vx), py - (b.y + t * b.vy));
+    // Hàm tìm vị trí an toàn nhất
+    function calculateBestEscape() {
+        let bestPoint = { x: boss.x, y: boss.y };
+        let minDanger = Infinity;
+
+        // Boss quét 36 điểm xung quanh trong vòng tròn arena để tìm chỗ trống
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 18) {
+            for (let dist = 30; dist < 120; dist += 30) {
+                let testX = boss.x + Math.cos(angle) * dist;
+                let testY = boss.y + Math.sin(angle) * dist;
+
+                // Kiểm tra xem điểm test có nằm trong Arena không
+                if (Math.hypot(testX - ARENA_X, testY - ARENA_Y) > ARENA_RADIUS - 30) continue;
+
+                let totalDanger = 0;
+                // Dự đoán vị trí đạn trong 1s, 2s tới (60 frame, 120 frame)
+                bullets.forEach(b => {
+                    for (let t = 0; t <= 120; t += 20) {
+                        let futureBX = b.x + b.vx * t;
+                        let futureBY = b.y + b.vy * t;
+                        let d = Math.hypot(testX - futureBX, testY - futureBY);
+                        if (d < 50) totalDanger += (120 - t); // Càng gần thời điểm hiện tại càng nguy hiểm
+                    }
+                });
+
+                if (totalDanger < minDanger) {
+                    minDanger = totalDanger;
+                    bestPoint = { x: testX, y: testY };
+                }
+            }
+        }
+        boss.targetX = bestPoint.x;
+        boss.targetY = bestPoint.y;
+        boss.isMoving = true;
     }
 
     function update() {
-        if (boss.odTimer > 0) { boss.odTimer -= 16; boss.isOD = true; } 
-        else { boss.isOD = false; }
+        if (boss.isMoving) {
+            const dx = boss.targetX - boss.x;
+            const dy = boss.targetY - boss.y;
+            const dist = Math.hypot(dx, dy);
 
-        let steer = 0;
-        let drive = 0;
-        let inDanger = false;
-        const margin = boss.hp === 1 ? 38 : 46;
+            if (dist > 2) {
+                // Xoay về phía mục tiêu
+                const targetAngle = Math.atan2(dy, dx);
+                let diff = targetAngle - boss.angle;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                
+                boss.angle += diff * 0.15; // Xoay mượt
 
-        // Tìm viên đạn nguy hiểm nhất để ưu tiên né viên đó trước, tránh loạn hướng
-        let mostDangerousBullet = null;
-        let minBulletDist = Infinity;
-
-        bullets.forEach(b => {
-            const dPath = getDistToPath(boss.x, boss.y, b);
-            const dBullet = Math.hypot(b.x - boss.x, b.y - boss.y);
-            if (dPath < margin && dBullet < 300) {
-                if (dBullet < minBulletDist) {
-                    minBulletDist = dBullet;
-                    mostDangerousBullet = b;
+                // Quyết định Tiến hoặc Lùi để đến mục tiêu nhanh nhất
+                let moveSpeed = 4.5;
+                if (Math.abs(diff) > Math.PI / 2) {
+                    moveSpeed = -4.5; // Lùi xe
                 }
-            }
-        });
-
-        if (mostDangerousBullet) {
-            inDanger = true;
-            const b = mostDangerousBullet;
-            // Tính toán side né (trái hay phải)
-            const perpX = -b.vy; const perpY = b.vx;
-            const sideDist = (boss.x - b.x) * perpX + (boss.y - b.y) * perpY;
-            
-            // Chống rung: Nếu đạn quá chính diện, giữ nguyên hướng né cũ
-            if (Math.abs(sideDist) < 2) {
-                boss.lastDodgeSide = boss.lastDodgeSide;
+                
+                boss.x += Math.cos(boss.angle) * moveSpeed;
+                boss.y += Math.sin(boss.angle) * moveSpeed;
             } else {
-                boss.lastDodgeSide = sideDist > 0 ? 1 : -1;
-            }
-
-            const targetAngle = Math.atan2(b.vy * boss.lastDodgeSide, b.vx * boss.lastDodgeSide);
-            
-            let diff = targetAngle - boss.angle;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-
-            // Xoay mượt không rung
-            steer = diff * 0.2; 
-            
-            // Quyết định tiến/lùi
-            if (Math.abs(diff) < Math.PI / 2) {
-                drive = boss.isOD ? 8 : 5;
-            } else {
-                drive = boss.isOD ? -8 : -5;
+                boss.isMoving = false; // Đã đến chỗ an toàn
             }
         }
 
-        // Thực thi xoay thân (Luôn xoay được kể cả khi kẹt)
-        boss.angle += steer;
-
-        // Thực thi di chuyển (Chỉ chặn tiến/lùi khi ra biên)
-        if (drive !== 0) {
-            let nx = boss.x + Math.cos(boss.angle) * drive;
-            let ny = boss.y + Math.sin(boss.angle) * drive;
-            if (Math.hypot(nx - ARENA_X, ny - ARENA_Y) < ARENA_RADIUS - 22) {
-                boss.x = nx; boss.y = ny;
-            } else {
-                // Nếu kẹt đầu, AI tự động đảo sang lùi (hoặc ngược lại) để thoát biên
-                let rx = boss.x + Math.cos(boss.angle) * -drive;
-                let ry = boss.y + Math.sin(boss.angle) * -drive;
-                if (Math.hypot(rx - ARENA_X, ry - ARENA_Y) < ARENA_RADIUS - 22) {
-                    boss.x = rx; boss.y = ry;
-                }
-            }
-        }
-
-        // Xử lý va chạm chuẩn
+        // Xử lý đạn và va chạm
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             b.x += b.vx; b.y += b.vy;
+            
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < 22) {
-                boss.hp--; boss.odTimer = 2000;
+                boss.hp--;
                 hpTxt.innerText = boss.hp;
                 bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
                 continue;
             }
-            if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i,1);
+            if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
         }
     }
 
     function draw() {
         ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Arena
+        // Vẽ Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
-        // Boss
+        // Vẽ đường dự báo đạn (Chỉ vẽ khi đạn xuất hiện)
+        ctx.setLineDash([5, 5]);
+        bullets.forEach(b => {
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x + b.vx * 100, b.y + b.vy * 100);
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Vẽ Boss
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
-        if (boss.hp === 1) { ctx.shadowBlur = 15; ctx.shadowColor = "red"; }
-        ctx.fillStyle = '#1a1a1a'; // Xích
-        ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
-        ctx.fillStyle = boss.isOD ? '#fff' : (boss.hp === 1 ? '#ff00ff' : '#ff3333');
-        ctx.fillRect(-18, -15, 36, 30); // Thân
-        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8); // Nòng
+        ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
+        ctx.fillStyle = boss.hp === 1 ? '#ff00ff' : '#ff3333';
+        ctx.fillRect(-18, -15, 36, 30);
+        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
-        // Đạn
+        // Vẽ đạn
         ctx.fillStyle = '#0f0';
         bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
 
