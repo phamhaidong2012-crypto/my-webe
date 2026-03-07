@@ -3,31 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v19 - Hotkeys Master</title>
+    <title>Boss AI v16 - Countdown Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; color: white; }
+        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 15px; left: 15px; pointer-events: none; z-index: 10; }
-        #hotkeys { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
-        .key-hint { background: rgba(255,255,255,0.1); padding: 10px 15px; border: 1px solid #0f0; border-radius: 5px; font-size: 14px; }
-        .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
-        #timer { position: fixed; top: 15px; right: 15px; font-size: 30px; color: #ff3333; font-weight: 900; }
+        #ui { position: fixed; top: 15px; left: 15px; color: white; pointer-events: none; z-index: 10; }
+        .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000; margin-bottom: 5px; }
+        
+        /* Đồng hồ đếm ngược giữa màn hình */
+        #timer-box { 
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+            color: #ff3333; font-size: 40px; font-weight: 900; pointer-events: none;
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.5); z-index: 10;
+        }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div class="stat" style="color: #ffd700;">XU: <span id="coins">0</span></div>
+    <div style="font-size: 11px; color: #0ff;">STABILITY: CALIBRATED | TIME ATTACK</div>
 </div>
 
-<div id="timer">01:00</div>
-
-<div id="hotkeys">
-    <div class="key-hint">Phím [1]: LASER (Chuột)</div>
-    <div class="key-hint">Phím [2]: 5 ĐẠN TẬP KÍCH</div>
-    <div class="key-hint">Phím [3]: 3 MÌN (Chuột)</div>
-</div>
+<div id="timer-box">01:00</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -35,8 +33,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const hpTxt = document.getElementById('hp');
-    const coinsTxt = document.getElementById('coins');
-    const timerTxt = document.getElementById('timer');
+    const timerTxt = document.getElementById('timer-box');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -48,103 +45,128 @@
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let bullets = [];
-    let lasers = [];
-    let timeLeft = 60;
-    let coins = parseInt(localStorage.getItem('tankCoins') || 0);
-    let mousePos = { x: 0, y: 0 };
+    let decisionCooldown = 0;
     
-    coinsTxt.innerText = coins;
+    // Cài đặt thời gian (giây)
+    let timeLeft = 60; 
 
-    // Lắng nghe phím tắt
-    window.addEventListener('keydown', (e) => {
-        if (e.key === '1') useSkill('laser');
-        if (e.key === '2') useSkill('storm');
-        if (e.key === '3') useSkill('mine');
-    });
-
-    window.addEventListener('mousemove', (e) => {
-        mousePos.x = e.clientX;
-        mousePos.y = e.clientY;
-    });
-
-    const timerInterval = setInterval(() => {
+    // Logic đếm ngược
+    const countdown = setInterval(() => {
         timeLeft--;
-        timerTxt.innerText = `00:${timeLeft.toString().padStart(2, '0')}`;
-        if (timeLeft <= 0) { clearInterval(timerInterval); alert("THUA!"); location.reload(); }
-    }, 1000);
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerTxt.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-    function useSkill(type) {
-        if (type === 'laser') {
-            const angle = Math.atan2(boss.y - mousePos.y, boss.x - mousePos.x);
-            lasers.push({ x: mousePos.x, y: mousePos.y, angle: angle, timer: 60 });
-        } else if (type === 'storm') {
-            for(let i=0; i<5; i++) {
-                let a = Math.random() * Math.PI * 2;
-                let startX = ARENA_X + Math.cos(a) * (ARENA_RADIUS + 100);
-                let startY = ARENA_Y + Math.sin(a) * (ARENA_RADIUS + 100);
-                let angleToBoss = Math.atan2(boss.y - startY, boss.x - startX);
-                bullets.push({ x: startX, y: startY, vx: Math.cos(angleToBoss)*7, vy: Math.sin(angleToBoss)*7 });
-            }
-        } else if (type === 'mine') {
-            for(let i=0; i<3; i++) {
-                bullets.push({ 
-                    x: mousePos.x + (Math.random()-0.5)*40, 
-                    y: mousePos.y + (Math.random()-0.5)*40, 
-                    vx: 0, vy: 0, timer: 300, type: 'mine' 
-                });
-            }
+        if (timeLeft <= 10) timerTxt.style.color = "#fff"; // Nháy trắng khi sắp hết giờ
+
+        if (timeLeft <= 0) {
+            clearInterval(countdown);
+            alert("HẾT GIỜ! BẠN ĐÃ THUA.");
+            location.reload();
         }
-    }
+    }, 1000);
 
     window.addEventListener('pointerdown', (e) => {
         if (Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y) <= ARENA_RADIUS) return;
-        const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
-        bullets.push({ x: e.clientX, y: e.clientY, vx: Math.cos(angle) * 8.5, vy: Math.sin(angle) * 8.5 });
+        setTimeout(() => {
+            const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
+            bullets.push({ x: e.clientX, y: e.clientY, vx: Math.cos(angle) * 8.5, vy: Math.sin(angle) * 8.5 });
+        }, 500);
     });
 
-    // Boss AI giữ nguyên logic Anti-Jitter và Future Collision
     function checkFutureCollision(testX, testY, futureFrames) {
         for (let f = 1; f <= futureFrames; f++) {
             for (let b of bullets) {
-                if (Math.hypot(testX - (b.x + b.vx * f), testY - (b.y + b.vy * f)) < BOSS_HITBOX + 12) return true;
+                let fbX = b.x + b.vx * f;
+                let fbY = b.y + b.vy * f;
+                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 12) return true;
             }
         }
         return false;
     }
 
-    function update() {
-        // AI di chuyển mượt
+    function findSafePath() {
+        if (decisionCooldown > 0) {
+            decisionCooldown--;
+            if (!checkFutureCollision(boss.x, boss.y, 20)) return;
+        }
+
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
-            for (let r = 0; r < ARENA_RADIUS - 20; r += 60) {
+        let currentPosScore = checkFutureCollision(boss.x, boss.y, 25) ? 1000000 : 0;
+
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 10) {
+            for (let r = 0; r < ARENA_RADIUS - 20; r += 50) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
-                let score = checkFutureCollision(tx, ty, 20) ? 100000 : Math.hypot(tx-ARENA_X, ty-ARENA_Y);
-                if (score < minScore) { minScore = score; bestPoint = { x: tx, y: ty }; }
+
+                let score = 0;
+                if (checkFutureCollision(tx, ty, 30)) {
+                    score += 2000000;
+                } else {
+                    let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
+                    let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
+                    let centerWeight = (bullets.length > 0) ? 0.1 : 1.5;
+                    score += distToCenter * centerWeight + distFromBoss;
+                }
+
+                if (score < minScore) {
+                    minScore = score;
+                    bestPoint = { x: tx, y: ty };
+                }
             }
         }
-        boss.x += (bestPoint.x - boss.x) * 0.08;
-        boss.y += (bestPoint.y - boss.y) * 0.08;
-        boss.angle = Math.atan2(boss.targetY - boss.y, boss.targetX - boss.x);
 
-        // Update Bullets
+        if (minScore < currentPosScore * 0.8 || currentPosScore > 0) {
+            boss.targetX = bestPoint.x;
+            boss.targetY = bestPoint.y;
+            decisionCooldown = 12;
+        }
+    }
+
+    function update() {
+        findSafePath();
+
+        const dx = boss.targetX - boss.x;
+        const dy = boss.targetY - boss.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 2) {
+            const angleToTarget = Math.atan2(dy, dx);
+            let diff = angleToTarget - boss.angle;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+
+            let steerSpeed = 0.2;
+            let moveSpeed = 6.5;
+
+            if (Math.abs(diff) > Math.PI / 2) {
+                let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
+                boss.angle += revDiff * steerSpeed;
+                moveSpeed = -6.5;
+            } else {
+                boss.angle += diff * steerSpeed;
+                moveSpeed = 6.5;
+            }
+
+            boss.x += Math.cos(boss.angle) * moveSpeed;
+            boss.y += Math.sin(boss.angle) * moveSpeed;
+        }
+
         for (let i = bullets.length - 1; i >= 0; i--) {
-            let b = bullets[i]; b.x += b.vx; b.y += b.vy;
-            if (b.type === 'mine') { b.timer--; if(b.timer <= 0) { bullets.splice(i,1); continue; } }
+            let b = bullets[i];
+            b.x += b.vx; b.y += b.vy;
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
-                boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
-                if (boss.hp <= 0) { coins += 10; localStorage.setItem('tankCoins', coins); alert("WIN +10 COINS"); location.reload(); }
-            } else if (b.x < -200 || b.x > canvas.width+200) bullets.splice(i, 1);
-        }
-
-        // Update Lasers
-        for (let i = lasers.length - 1; i >= 0; i--) {
-            let l = lasers[i]; l.timer--;
-            if (l.timer <= 0) {
-                for(let j=0; j<20; j++) bullets.push({ x: l.x, y: l.y, vx: Math.cos(l.angle)*(10+j), vy: Math.sin(l.angle)*(10+j), isLaser: true });
-                lasers.splice(i, 1);
+                boss.hp--; hpTxt.innerText = boss.hp;
+                bullets.splice(i, 1);
+                if (boss.hp <= 0) { 
+                    clearInterval(countdown); // Dừng đếm ngược khi thắng
+                    alert("VICTORY!"); 
+                    location.reload(); 
+                }
+                continue;
             }
+            if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
         }
     }
 
@@ -153,18 +175,23 @@
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
-        lasers.forEach(l => {
-            ctx.beginPath(); ctx.moveTo(l.x, l.y);
-            ctx.lineTo(l.x + Math.cos(l.angle)*1000, l.y + Math.sin(l.angle)*1000);
-            ctx.strokeStyle = `rgba(255, 0, 255, ${1 - l.timer/60})`; ctx.stroke();
-        });
-
-        ctx.fillStyle = '#ff3333'; ctx.beginPath(); ctx.arc(boss.x, boss.y, 18, 0, Math.PI*2); ctx.fill();
-
         bullets.forEach(b => {
-            ctx.fillStyle = b.type === 'mine' ? '#ff0' : (b.isLaser ? '#f0f' : '#0f0');
-            ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x + b.vx * 400, b.y + b.vy * 400);
+            ctx.strokeStyle = 'rgba(0, 255, 150, 0.1)'; ctx.stroke();
         });
+
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+        ctx.rotate(boss.angle);
+        ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
+        ctx.fillStyle = (boss.hp === 1) ? '#ff00ff' : '#ff3333';
+        ctx.fillRect(-18, -15, 36, 30);
+        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
+        ctx.restore();
+
+        ctx.fillStyle = '#0f0';
+        bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
 
         update();
         requestAnimationFrame(draw);
