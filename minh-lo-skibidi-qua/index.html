@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI - Tank Dodge</title>
+    <title>Boss AI Ultra - Tank Physics</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #333; touch-action: none; font-family: sans-serif; }
-        canvas { display: block; background: #222; }
-        #ui { position: fixed; top: 10px; left: 10px; color: white; pointer-events: none; font-size: 20px; }
+        body { margin: 0; overflow: hidden; background: #1a1a1a; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: fixed; top: 10px; left: 10px; color: white; pointer-events: none; font-size: 20px; text-shadow: 2px 2px 4px black; }
     </style>
 </head>
 <body>
@@ -23,113 +23,142 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    let boss = { x: canvas.width / 2, y: 150, w: 50, h: 50, hp: 3, color: 'red', vx: 0, vy: 0 };
+    const ARENA_RADIUS = 160;
+    const ARENA_X = canvas.width / 2;
+    const ARENA_Y = canvas.height / 2;
+
+    let boss = { 
+        x: ARENA_X, y: ARENA_Y, 
+        angle: 0, 
+        speed: 0, 
+        rotSpeed: 0,
+        hp: 3, 
+        radius: 20, // Bán kính va chạm của xe
+        color: '#ff4444'
+    };
+    
     let bullets = [];
-    let spawnQueue = []; // Hàng đợi tạo đạn sau 0.5s
 
-    // Nhấp chuột để bắn
     window.addEventListener('pointerdown', (e) => {
-        // Không bắn nếu trúng vị trí Boss
-        if (Math.hypot(e.clientX - boss.x, e.clientY - boss.y) < 50) return;
+        const dist = Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y);
+        if (dist <= ARENA_RADIUS) return;
 
-        // Đợi 0.5 giây rồi mới tạo đạn
         setTimeout(() => {
             const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
             bullets.push({
-                x: e.clientX,
-                y: e.clientY,
-                vx: Math.cos(angle) * 7,
-                vy: Math.sin(angle) * 7,
+                x: e.clientX, y: e.clientY,
+                vx: Math.cos(angle) * 8.5,
+                vy: Math.sin(angle) * 8.5,
                 active: true
             });
         }, 500);
     });
 
+    function getDistToLine(px, py, x1, y1, vx, vy) {
+        // Tính khoảng cách gần nhất từ Boss đến quỹ đạo viên đạn
+        const dx = vx; const dy = vy;
+        const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+        if (t < 0) return Infinity; // Đạn chưa bay tới hoặc bay qua rồi
+        const nearestX = x1 + t * dx;
+        const nearestY = y1 + t * dy;
+        return Math.hypot(px - nearestX, py - nearestY);
+    }
+
     function update() {
-        // Boss AI: Tính toán né đạn
-        let dodgeX = 0;
-        let dodgeY = 0;
+        boss.speed *= 0.8; // Ma sát
+        boss.rotSpeed *= 0.7;
+
+        let bestDodgeMove = 0; // -1: lùi, 1: tiến
+        let bestDodgeTurn = 0; // -1: trái, 1: phải
+        let dangerFound = false;
 
         bullets.forEach(b => {
             if (!b.active) return;
 
-            // Dự đoán vị trí va chạm
-            let dist = Math.hypot(b.x - boss.x, b.y - boss.y);
-            
-            // Nếu đạn đang bay đến gần (khoảng cách < 200px)
-            if (dist < 200) {
-                // Tính toán vector né vuông góc với quỹ đạo đạn
-                let dx = boss.x - b.x;
-                let dy = boss.y - b.y;
+            // Kiểm tra xem đạn có đang nhắm vào mình không
+            const distToPath = getDistToLine(boss.x, boss.y, b.x, b.y, b.vx, b.vy);
+            const distToBullet = Math.hypot(b.x - boss.x, b.y - boss.y);
+
+            if (distToPath < 45 && distToBullet < 200) { 
+                dangerFound = true;
+                // AI tính toán hướng lách:
+                // Tìm vector vuông góc với hướng đạn
+                const perpX = -b.vy; const perpY = b.vx;
+                const side = (boss.x - b.x) * perpX + (boss.y - b.y) * perpY;
                 
-                // Boss di chuyển ngang để né
-                dodgeX += dy > 0 ? 5 : -5;
-                dodgeY += dx > 0 ? -5 : 5;
+                // Quyết định tiến hay lùi dựa trên hướng xe hiện tại so với hướng cần né
+                const targetAngle = Math.atan2(perpY * (side > 0 ? 1 : -1), perpX * (side > 0 ? 1 : -1));
+                let angleDiff = targetAngle - boss.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                bestDodgeTurn = angleDiff > 0 ? 0.15 : -0.15;
+                bestDodgeMove = Math.abs(angleDiff) < Math.PI/2 ? 5 : -5;
             }
         });
 
-        // Áp dụng di chuyển né và giới hạn trong màn hình
-        if (dodgeX !== 0) boss.x += (dodgeX > 0 ? 4 : -4);
-        if (dodgeY !== 0) boss.y += (dodgeY > 0 ? 4 : -4);
+        // Áp dụng AI vào cơ chế vật lý xe tăng (Tiến/Lùi/Xoay)
+        if (dangerFound) {
+            boss.angle += bestDodgeTurn;
+            let nextX = boss.x + Math.cos(boss.angle) * bestDodgeMove;
+            let nextY = boss.y + Math.sin(boss.angle) * bestDodgeMove;
 
-        // Giới hạn biên màn hình
-        boss.x = Math.max(50, Math.min(canvas.width - 50, boss.x));
-        boss.y = Math.max(50, Math.min(canvas.height - 200, boss.y));
+            // Chặn không cho Boss ra khỏi vòng
+            if (Math.hypot(nextX - ARENA_X, nextY - ARENA_Y) < ARENA_RADIUS - 22) {
+                boss.x = nextX;
+                boss.y = nextY;
+            }
+        }
 
         // Cập nhật đạn
-        bullets.forEach((b, index) => {
-            b.x += b.vx;
-            b.y += b.vy;
-
-            // Kiểm tra va chạm với Boss
-            if (b.active && Math.hypot(b.x - boss.x, b.y - boss.y) < 30) {
-                boss.hp--;
-                b.active = false;
+        bullets.forEach((b, i) => {
+            b.x += b.vx; b.y += b.vy;
+            if (b.active && Math.hypot(b.x - boss.x, b.y - boss.y) < 22) {
+                boss.hp--; b.active = false;
                 hpTxt.innerText = Math.max(0, boss.hp);
-                if (boss.hp <= 0) {
-                    setTimeout(() => { alert("Boss đã bị tiêu diệt!"); location.reload(); }, 100);
-                }
+                if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
             }
-
-            // Xóa đạn ra khỏi màn hình
-            if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
-                bullets.splice(index, 1);
-            }
+            if (b.x < -50 || b.x > canvas.width+50 || b.y < -50 || b.y > canvas.height+50) bullets.splice(i, 1);
         });
     }
 
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Vẽ Arena
+        ctx.beginPath();
+        ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
+        ctx.strokeStyle = '#555'; ctx.setLineDash([10, 10]); ctx.stroke();
+        ctx.setLineDash([]);
 
         // Vẽ Boss (Xe tăng)
         ctx.save();
         ctx.translate(boss.x, boss.y);
+        ctx.rotate(boss.angle);
+        // Bánh xích
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-22, -22, 44, 10);
+        ctx.fillRect(-22, 12, 44, 10);
+        // Thân
         ctx.fillStyle = boss.color;
-        ctx.fillRect(-25, -25, 50, 50); // Thân xe
-        ctx.fillStyle = "black";
-        ctx.fillRect(-5, -35, 10, 20); // Nòng pháo
-        // Vẽ bánh xích
-        ctx.fillStyle = "#555";
-        ctx.fillRect(-30, -25, 10, 50);
-        ctx.fillRect(20, -25, 10, 50);
+        ctx.fillRect(-18, -15, 36, 30);
+        // Nòng
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
         // Vẽ đạn
-        ctx.fillStyle = "yellow";
+        ctx.fillStyle = '#0f0';
         bullets.forEach(b => {
             if (b.active) {
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
             }
         });
 
         update();
         requestAnimationFrame(draw);
     }
-
     draw();
 </script>
-
 </body>
 </html>
