@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v15 - Tactical Patience</title>
+    <title>Boss AI v16 - Anti-Jitter</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #fb0;">BEHAVIOR: TACTICAL PATIENCE | DANGER > CENTER</div>
+    <div style="font-size: 11px; color: #0ff;">STABILITY: CALIBRATED | NO JITTER</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -34,6 +34,7 @@
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let bullets = [];
+    let decisionCooldown = 0; // Bộ đếm để ổn định quyết định
 
     window.addEventListener('pointerdown', (e) => {
         if (Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y) <= ARENA_RADIUS) return;
@@ -48,37 +49,35 @@
             for (let b of bullets) {
                 let fbX = b.x + b.vx * f;
                 let fbY = b.y + b.vy * f;
-                // Vùng cấm rộng hơn để tạo khoảng cách an toàn
-                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 15) return true;
+                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 12) return true;
             }
         }
         return false;
     }
 
     function findSafePath() {
+        if (decisionCooldown > 0) {
+            decisionCooldown--;
+            // Nếu chỗ đang đứng vẫn an toàn thì không cần tính lại
+            if (!checkFutureCollision(boss.x, boss.y, 20)) return;
+        }
+
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
+        let currentPosScore = checkFutureCollision(boss.x, boss.y, 25) ? 1000000 : 0;
 
-        // Kiểm tra xem hiện tại có nguy hiểm không
-        let isCurrentlySafe = !checkFutureCollision(boss.x, boss.y, 25);
-        let bulletCount = bullets.length;
-
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
-            for (let r = 0; r < ARENA_RADIUS - 20; r += 40) {
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 10) {
+            for (let r = 0; r < ARENA_RADIUS - 20; r += 50) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
 
                 let score = 0;
-                let willCollide = checkFutureCollision(tx, ty, 30);
-                
-                if (willCollide) {
-                    score += 1000000; // Phạt cực nặng nếu đâm vào đạn
+                if (checkFutureCollision(tx, ty, 30)) {
+                    score += 2000000;
                 } else {
                     let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
                     let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
-                    
-                    // Nếu đang có đạn, Boss coi trọng việc đứng yên ở chỗ an toàn hơn là chạy về tâm
-                    let centerWeight = (bulletCount > 0) ? 0.2 : 2.0; 
+                    let centerWeight = (bullets.length > 0) ? 0.1 : 1.5;
                     score += distToCenter * centerWeight + distFromBoss;
                 }
 
@@ -89,13 +88,12 @@
             }
         }
 
-        // Nếu vị trí hiện tại đã rất an toàn và đang có đạn, đừng ham di chuyển
-        if (isCurrentlySafe && bulletCount > 0 && Math.hypot(boss.x - bestPoint.x, boss.y - bestPoint.y) < 50) {
-            return; 
+        // CHỐNG RUNG: Chỉ đổi mục tiêu nếu điểm mới tốt hơn điểm hiện tại đáng kể
+        if (minScore < currentPosScore * 0.8 || currentPosScore > 0) {
+            boss.targetX = bestPoint.x;
+            boss.targetY = bestPoint.y;
+            decisionCooldown = 12; // Khóa quyết định trong 12 frames
         }
-
-        boss.targetX = bestPoint.x;
-        boss.targetY = bestPoint.y;
     }
 
     function update() {
@@ -105,19 +103,21 @@
         const dy = boss.targetY - boss.y;
         const dist = Math.hypot(dx, dy);
 
-        if (dist > 1) {
+        if (dist > 2) { // Ngưỡng dừng lớn hơn để tránh nhích li ti
             const angleToTarget = Math.atan2(dy, dx);
             let diff = angleToTarget - boss.angle;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
 
+            let steerSpeed = 0.2;
             let moveSpeed = 6.5;
+
             if (Math.abs(diff) > Math.PI / 2) {
                 let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                boss.angle += revDiff * 0.25;
+                boss.angle += revDiff * steerSpeed;
                 moveSpeed = -6.5;
             } else {
-                boss.angle += diff * 0.25;
+                boss.angle += diff * steerSpeed;
                 moveSpeed = 6.5;
             }
 
@@ -144,11 +144,9 @@
         ctx.strokeStyle = '#222'; ctx.stroke();
 
         bullets.forEach(b => {
-            ctx.beginPath();
-            ctx.moveTo(b.x, b.y);
+            ctx.beginPath(); ctx.moveTo(b.x, b.y);
             ctx.lineTo(b.x + b.vx * 400, b.y + b.vy * 400);
-            ctx.strokeStyle = 'rgba(0, 255, 150, 0.1)';
-            ctx.stroke();
+            ctx.strokeStyle = 'rgba(0, 255, 150, 0.1)'; ctx.stroke();
         });
 
         ctx.save();
