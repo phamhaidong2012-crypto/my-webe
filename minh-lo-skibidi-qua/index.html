@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v11 - Path Safety</title>
+    <title>Boss AI v12 - Survival Instinct</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #0f0;">PATH VALIDATION: ACTIVE | NO COLLISION DRIVE</div>
+    <div style="font-size: 11px; color: #0f0;">SURVIVAL MODE: ON | MICRO-DODGING</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -30,7 +30,7 @@
     const ARENA_RADIUS = 225;
     const ARENA_X = canvas.width / 2;
     const ARENA_Y = canvas.height / 2;
-    const BOSS_HITBOX = 17; 
+    const BOSS_HITBOX = 17;
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y, isMoving: false };
     let bullets = [];
@@ -43,47 +43,33 @@
         }, 500);
     });
 
-    function getDist(x1, y1, x2, y2) { return Math.hypot(x1 - x2, y1 - y2); }
-
     function distPointToLine(px, py, b) {
         const t = ((px - b.x) * b.vx + (py - b.y) * b.vy) / (b.vx**2 + b.vy**2);
-        if (t < 0) return getDist(px, py, b.x, b.y);
-        return getDist(px, py, b.x + t * b.vx, b.y + t * b.vy);
-    }
-
-    // Kiểm tra xem một đoạn thẳng (đường di chuyển của Boss) có bị đạn cắt ngang không
-    function isPathDangerous(startX, startY, endX, endY) {
-        const steps = 10;
-        for (let i = 0; i <= steps; i++) {
-            let checkX = startX + (endX - startX) * (i / steps);
-            let checkY = startY + (endY - startY) * (i / steps);
-            if (bullets.some(b => distPointToLine(checkX, checkY, b) < 35)) return true;
-        }
-        return false;
+        if (t < 0) return Math.hypot(px - b.x, py - b.y);
+        return Math.hypot(px - (b.x + t * b.vx), py - (b.y + t * b.vy));
     }
 
     function findSafePath() {
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
 
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 10) {
-            for (let r = 0; r < ARENA_RADIUS - 20; r += 45) {
+        // Quét lưới mật độ cao để tìm khe hở
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+            for (let r = 0; r < ARENA_RADIUS - 20; r += 30) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
 
                 let danger = 0;
                 bullets.forEach(b => {
                     let d = distPointToLine(tx, ty, b);
-                    if (d < 40) danger += (40 - d) * 100;
+                    if (d < 35) danger += (35 - d) * 100;
                 });
 
-                // Kiểm tra lộ trình di chuyển từ vị trí hiện tại đến điểm test
-                if (isPathDangerous(boss.x, boss.y, tx, ty)) danger += 5000;
-
-                let distToCenter = getDist(tx, ty, ARENA_X, ARENA_Y);
-                let distFromBoss = getDist(tx, ty, boss.x, boss.y);
+                let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
+                let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
                 
-                let score = danger * 100 + distToCenter * 2 + distFromBoss;
+                // Trọng số mới: Ưu tiên thoát hiểm tuyệt đối, bỏ qua việc chạy về tâm nếu đang có đạn
+                let score = danger * 1000 + distToCenter * 0.5 + distFromBoss;
 
                 if (score < minScore) {
                     minScore = score;
@@ -92,14 +78,10 @@
             }
         }
 
-        // Chỉ đi nếu điểm mới an toàn hơn hẳn và lộ trình không có đạn
-        if (!isPathDangerous(boss.x, boss.y, bestPoint.x, bestPoint.y) || bullets.length === 0) {
-            boss.targetX = bestPoint.x;
-            boss.targetY = bestPoint.y;
-            boss.isMoving = true;
-        } else {
-            boss.isMoving = false; // Dừng lại nếu mọi đường đi đều nguy hiểm
-        }
+        // Luôn cập nhật target để Boss không bị kẹt
+        boss.targetX = bestPoint.x;
+        boss.targetY = bestPoint.y;
+        boss.isMoving = true;
     }
 
     function update() {
@@ -108,43 +90,33 @@
         if (boss.isMoving) {
             const dx = boss.targetX - boss.x;
             const dy = boss.targetY - boss.y;
-            const dist = getDist(boss.x, boss.y, boss.targetX, boss.targetY);
+            const dist = Math.hypot(dx, dy);
 
-            if (dist > 2) {
+            if (dist > 1) {
                 const angleToTarget = Math.atan2(dy, dx);
                 let diff = angleToTarget - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
 
-                let moveSpeed = 6;
-                let steerLimit = 0.2;
-
+                let moveSpeed = 6.5;
                 if (Math.abs(diff) > Math.PI / 2) {
                     let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                    boss.angle += revDiff * steerLimit;
-                    moveSpeed = -6;
+                    boss.angle += revDiff * 0.25;
+                    moveSpeed = -6.5;
                 } else {
-                    boss.angle += diff * steerLimit;
-                    moveSpeed = 6;
+                    boss.angle += diff * 0.25;
+                    moveSpeed = 6.5;
                 }
 
-                // Dự phòng: Nếu bước đi tiếp theo đâm vào đạn, dừng lại
-                let nextX = boss.x + Math.cos(boss.angle) * moveSpeed;
-                let nextY = boss.y + Math.sin(boss.angle) * moveSpeed;
-                
-                if (!bullets.some(b => distPointToLine(nextX, nextY, b) < 32)) {
-                    boss.x = nextX;
-                    boss.y = nextY;
-                } else {
-                    boss.isMoving = false; // Emergency Brake
-                }
+                boss.x += Math.cos(boss.angle) * moveSpeed;
+                boss.y += Math.sin(boss.angle) * moveSpeed;
             }
         }
 
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
             b.x += b.vx; b.y += b.vy;
-            if (getDist(b.x, b.y, boss.x, boss.y) < BOSS_HITBOX) {
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp;
                 bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
@@ -159,8 +131,6 @@
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
-        // Đường kẻ xanh lá
-        ctx.lineWidth = 1;
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
@@ -169,7 +139,6 @@
             ctx.stroke();
         });
 
-        // Boss
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
@@ -179,7 +148,6 @@
         ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
-        // Đạn
         ctx.fillStyle = '#0f0';
         bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
 
