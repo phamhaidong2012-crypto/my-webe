@@ -3,25 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17.2 - Tower Defense Mode</title>
+    <title>Boss AI v17.3 - N-Shield Protocol</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
         .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; margin-bottom: 5px; }
         #player-ui { position: fixed; bottom: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
+        #shield-ui { 
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); 
+            text-align: center; color: #0cf; font-weight: 900; display: none;
+        }
+        .warning { color: #ff3333; font-size: 24px; animation: blink 0.2s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V27 | AUTO_COUNTER: ON</div>
+    <div style="font-size: 10px;">CORE: CORTEX-V28 | SHIELD_PROTOCOL: ACTIVE</div>
+</div>
+
+<div id="shield-ui">
+    <div class="warning">WARNING: 12 DAMAGE DETECTED!</div>
+    <div style="font-size: 30px;">SHIELD: <span id="shield-count">0</span>/12</div>
+    <div style="font-size: 12px;">NHẤN [N] LIÊN TỤC ĐỂ ĐỠ!</div>
 </div>
 
 <div id="player-ui">
     <div class="stat">TOWER HP: <span id="p-hp">3</span></div>
-    <div style="font-size: 10px;">RELOAD: <span id="timer-txt">0</span>s</div>
+    <div style="font-size: 10px;">BOSS ATTACK IN: <span id="timer-txt">30</span>s</div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -32,6 +44,8 @@
     const hpTxt = document.getElementById('hp');
     const pHpTxt = document.getElementById('p-hp');
     const timerTxt = document.getElementById('timer-txt');
+    const shieldUi = document.getElementById('shield-ui');
+    const shieldCountTxt = document.getElementById('shield-count');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -41,177 +55,189 @@
     const ARENA_Y = canvas.height / 2;
     const BOSS_REAL_HITBOX = 5; 
     const SAFETY_BUFFER = 55;
-
-    // Vị trí tháp của người chơi
-    const TOWER = { x: canvas.width / 2, y: canvas.height - 50, size: 40 };
+    const TOWER = { x: canvas.width / 2, y: canvas.height - 60, size: 50 };
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let playerHp = 3;
-    let bullets = [];      // Đạn của người chơi (Xanh lá)
-    let bossBullets = [];  // Đạn của Boss (Đỏ/Tím)
+    let bullets = [];      
+    let bossBullets = [];  
     let mouseX = 0, mouseY = 0;
     let gameTime = 0;
     let lastDecisionTime = 0;
     let isDivided = false;
 
-    // Vòng lặp thời gian thực thay thế đếm ngược
+    // Logic Khiên N
+    let shieldCount = 0;
+    let isGathering = false;
+    let gatherRadius = 0;
+    let nPressed = false;
+
     setInterval(() => {
         gameTime++;
-        timerTxt.innerText = (30 - (gameTime % 30));
+        let countdown = 30 - (gameTime % 30);
+        timerTxt.innerText = countdown;
         
-        // Cứ mỗi 30 giây kích hoạt chia sân và Boss bắn đạn
         if (gameTime >= 30) isDivided = true;
-        if (gameTime % 30 === 0) bossShoot();
+
+        // Bắt đầu hội tụ trước khi bắn 3 giây (giây thứ 27)
+        if (countdown === 3) startGathering();
+        
+        if (gameTime > 0 && gameTime % 30 === 0) bossShoot();
     }, 1000);
 
+    function startGathering() {
+        isGathering = true;
+        gatherRadius = 150;
+        shieldCount = 0;
+        shieldCountTxt.innerText = "0";
+        shieldUi.style.display = "block";
+    }
+
+    function bossShoot() {
+        isGathering = false;
+        shieldUi.style.display = "none";
+        
+        const isBlocked = shieldCount >= 12;
+        const angle = Math.atan2(TOWER.y - boss.y, TOWER.x - boss.x);
+        
+        bossBullets.push({
+            x: boss.x, y: boss.y,
+            vx: Math.cos(angle) * 8,
+            vy: Math.sin(angle) * 8,
+            blocked: isBlocked // Gắn nhãn viên đạn này có bị chặn hay không
+        });
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { e.preventDefault(); fireBullet(); }
+        if (e.code === 'KeyN' && !nPressed && isGathering) {
+            nPressed = true; // Chống ấn giữ
+            shieldCount++;
+            shieldCountTxt.innerText = shieldCount;
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyN') nPressed = false;
+    });
+
     window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+    window.addEventListener('pointerdown', fireBullet);
 
     function fireBullet() {
         if (Math.hypot(mouseX - ARENA_X, mouseY - ARENA_Y) <= ARENA_RADIUS) return;
         const angle = Math.atan2(boss.y - mouseY, boss.x - mouseX);
-        bullets.push({ 
-            x: mouseX, y: mouseY, 
-            vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, 
-            charge: 30, active: false 
-        });
+        bullets.push({ x: mouseX, y: mouseY, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, charge: 30, active: false });
     }
-
-    function bossShoot() {
-        const angle = Math.atan2(TOWER.y - boss.y, TOWER.x - boss.x);
-        bossBullets.push({
-            x: boss.x, y: boss.y,
-            vx: Math.cos(angle) * 6,
-            vy: Math.sin(angle) * 6
-        });
-    }
-
-    window.addEventListener('pointerdown', (e) => { mouseX = e.clientX; mouseY = e.clientY; fireBullet(); });
-    window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); fireBullet(); } });
 
     function getRiskAt(tx, ty) {
         let totalRisk = 0;
         if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) return 1000000;
         if (isDivided && tx > ARENA_X - 15) return 1000000;
-
         for (let b of bullets) {
             let dx = b.vx, dy = b.vy;
             let num = Math.abs(dx * (b.y - ty) - (b.x - tx) * dy);
             let den = Math.sqrt(dx * dx + dy * dy);
-            let distToPath = num / den;
-            if (distToPath < SAFETY_BUFFER) {
+            if (num / den < SAFETY_BUFFER) {
                 let dot = (tx - b.x) * dx + (ty - b.y) * dy;
-                if (dot > -10) totalRisk += (SAFETY_BUFFER - distToPath) * 200;
+                if (dot > -10) totalRisk += (SAFETY_BUFFER - (num / den)) * 200;
             }
         }
         return totalRisk;
     }
 
     function solveAI() {
+        if (isDivided && boss.x > ARENA_X - 20) { boss.targetX = ARENA_X - 100; boss.targetY = ARENA_Y; return; }
         const now = Date.now();
-        if (isDivided && boss.x > ARENA_X - 20) {
-            boss.targetX = ARENA_X - 100; boss.targetY = ARENA_Y;
-            return;
-        }
-        let currentDestRisk = getRiskAt(boss.targetX, boss.targetY);
-        if (currentDestRisk < 500 && now - lastDecisionTime < 150) return;
-
+        if (getRiskAt(boss.targetX, boss.targetY) < 500 && now - lastDecisionTime < 150) return;
         let bestScore = getRiskAt(boss.x, boss.y);
         let bestP = { x: boss.x, y: boss.y };
-
         for (let i = 0; i < 48; i++) {
             let ang = (i / 48) * Math.PI * 2;
             let tx = boss.x + Math.cos(ang) * 95;
             let ty = boss.y + Math.sin(ang) * 95;
-            let score = getRiskAt(tx, ty);
-            score += Math.hypot(tx - (isDivided ? ARENA_X - 100 : ARENA_X), ty - ARENA_Y) * 1.5;
+            let score = getRiskAt(tx, ty) + Math.hypot(tx - (isDivided ? ARENA_X - 100 : ARENA_X), ty - ARENA_Y) * 1.5;
             if (score < bestScore) { bestScore = score; bestP = { x: tx, y: ty }; }
         }
-        if (Math.hypot(boss.targetX - bestP.x, boss.targetY - bestP.y) > 15) {
-            boss.targetX = bestP.x; boss.targetY = bestP.y;
-            lastDecisionTime = now;
-        }
+        boss.targetX = bestP.x; boss.targetY = bestP.y; lastDecisionTime = now;
     }
 
     function update() {
         solveAI();
-        let dx = boss.targetX - boss.x;
-        let dy = boss.targetY - boss.y;
-        let d = Math.hypot(dx, dy);
+        let dx = boss.targetX - boss.x, dy = boss.targetY - boss.y, d = Math.hypot(dx, dy);
         if (d > 2) {
             let targetAngle = Math.atan2(dy, dx);
             let diff = targetAngle - boss.angle;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
             boss.angle += diff * 0.15;
-            boss.x += Math.cos(boss.angle) * 8.8;
-            boss.y += Math.sin(boss.angle) * 8.8;
+            boss.x += Math.cos(boss.angle) * 8.8; boss.y += Math.sin(boss.angle) * 8.8;
         }
 
-        // Xử lý đạn người chơi
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            let b = bullets[i];
+        // Xử lý vòng hội tụ
+        if (isGathering) gatherRadius -= 150 / (3 * 60);
+
+        bullets.forEach((b, i) => {
             if (b.charge > 0) { b.charge--; if (b.charge <= 0) b.active = true; }
             if (b.active) { b.x += b.vx; b.y += b.vy; }
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
                 if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
             } else if (b.x < -1000 || b.x > canvas.width+1000) bullets.splice(i, 1);
-        }
+        });
 
-        // Xử lý đạn Boss
-        for (let i = bossBullets.length - 1; i >= 0; i--) {
-            let b = bossBullets[i];
+        bossBullets.forEach((b, i) => {
             b.x += b.vx; b.y += b.vy;
-            if (Math.hypot(b.x - TOWER.x, b.y - TOWER.y) < TOWER.size/2) {
-                playerHp--; pHpTxt.innerText = playerHp; bossBullets.splice(i, 1);
-                if (playerHp <= 0) { alert("THÁP ĐÃ SỤP ĐỔ! BẠN THUA"); location.reload(); }
+            if (Math.hypot(b.x - TOWER.x, b.y - TOWER.y) < TOWER.size / 2) {
+                if (!b.blocked) {
+                    playerHp--; pHpTxt.innerText = playerHp;
+                }
+                bossBullets.splice(i, 1);
+                if (playerHp <= 0) { alert("THÁP SỤP ĐỔ!"); location.reload(); }
             } else if (b.y > canvas.height + 100) bossBullets.splice(i, 1);
-        }
+        });
     }
 
     function draw() {
         ctx.fillStyle = '#020202'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Vẽ Arena
+        // Arena & Wall
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
-        ctx.strokeStyle = isDivided ? '#ff3333' : '#111'; 
-        ctx.lineWidth = 3; ctx.stroke();
-
+        ctx.strokeStyle = isDivided ? '#ff3333' : '#111'; ctx.lineWidth = 3; ctx.stroke();
         if (isDivided) {
             ctx.beginPath(); ctx.moveTo(ARENA_X, ARENA_Y - ARENA_RADIUS); ctx.lineTo(ARENA_X, ARENA_Y + ARENA_RADIUS);
             ctx.strokeStyle = '#ff3333'; ctx.setLineDash([10, 5]); ctx.stroke(); ctx.setLineDash([]);
         }
 
-        // Vẽ Tháp của người chơi
-        ctx.fillStyle = '#0f0';
-        ctx.shadowBlur = 15; ctx.shadowColor = '#0f0';
-        ctx.fillRect(TOWER.x - 20, TOWER.y - 20, 40, 40);
-        ctx.shadowBlur = 0;
+        // Tháp & Khiên (Nếu chặn thành công)
+        ctx.fillStyle = '#0f0'; ctx.fillRect(TOWER.x - 25, TOWER.y - 25, 50, 50);
+        if (isGathering && shieldCount >= 12) {
+            ctx.beginPath(); ctx.arc(TOWER.x, TOWER.y, 45, 0, Math.PI*2);
+            ctx.strokeStyle = '#0cf'; ctx.lineWidth = 5; ctx.stroke();
+        }
 
-        // Vẽ đạn người chơi + tia xanh
+        // Vòng hội tụ của Boss
+        if (isGathering) {
+            ctx.beginPath(); ctx.arc(boss.x, boss.y, Math.max(0, gatherRadius), 0, Math.PI*2);
+            ctx.strokeStyle = '#f0f'; ctx.lineWidth = 2; ctx.stroke();
+        }
+
+        // Đạn người chơi
         bullets.forEach(b => {
-            ctx.beginPath(); ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
+            ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
             ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)'; ctx.stroke();
-            if (!b.active) {
-                ctx.beginPath(); ctx.arc(b.x, b.y, b.charge/2+5, 0, Math.PI*2);
-                ctx.strokeStyle = '#0f0'; ctx.stroke();
-            }
             ctx.fillStyle = b.active ? '#0f0' : '#333';
             ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
         });
 
-        // Vẽ đạn Boss (Màu tím neon)
+        // Đạn Boss
         bossBullets.forEach(b => {
-            ctx.fillStyle = '#f0f';
-            ctx.shadowBlur = 10; ctx.shadowColor = '#f0f';
-            ctx.beginPath(); ctx.arc(b.x, b.y, 8, 0, Math.PI*2); ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.fillStyle = b.blocked ? 'rgba(0, 204, 255, 0.3)' : '#f0f';
+            ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI*2); ctx.fill();
         });
 
-        // Vẽ Boss
-        ctx.save();
-        ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
+        // Boss
+        ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
         ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
         ctx.fillStyle = (boss.hp === 1) ? '#f0f' : '#f33'; ctx.fillRect(-18, -15, 36, 30);
         ctx.restore();
