@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v7 - Precision Threading</title>
+    <title>Boss AI v8 - Center Control</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #aaa;">THREADING MODE: ACTIVE</div>
+    <div style="font-size: 11px; color: #0af;">POSITIONING: CENTER PRIORITY</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -43,48 +43,51 @@
     });
 
     function distPointToLine(px, py, b) {
-        const dx = b.vx, dy = b.vy;
-        const t = ((px - b.x) * dx + (py - b.y) * dy) / (dx * dx + dy * dy);
+        const t = ((px - b.x) * b.vx + (py - b.y) * b.vy) / (b.vx**2 + b.vy**2);
         if (t < 0) return Infinity;
-        return Math.hypot(px - (b.x + t * dx), py - (b.y + t * dy));
+        return Math.hypot(px - (b.x + t * b.vx), py - (b.y + t * b.vy));
     }
 
     function findSafePath() {
-        // Kiểm tra xem vị trí hiện tại có thực sự bị đạn đâm trúng không (hitbox 25px)
-        let isSafe = !bullets.some(b => distPointToLine(boss.x, boss.y, b) < 30);
-        if (isSafe) {
-            boss.isMoving = false;
-            return;
-        }
-
-        let bestPoint = { x: boss.x, y: boss.y };
+        let isDangerous = bullets.some(b => distPointToLine(boss.x, boss.y, b) < 35);
+        
+        let bestPoint = { x: ARENA_X, y: ARENA_Y }; // Mặc định muốn về tâm
         let minScore = Infinity;
 
-        // Boss quét tìm các "khe hở" nhỏ nhất có thể lách qua
+        // Nếu an toàn, Boss chỉ nhẹ nhàng quay về tâm. Nếu nguy hiểm, Boss ưu tiên né.
         for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
-            for (let r = 15; r < 100; r += 20) {
-                let tx = boss.x + Math.cos(a) * r;
-                let ty = boss.y + Math.sin(a) * r;
-
-                if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 22) continue;
+            for (let r = 0; r < ARENA_RADIUS - 25; r += 40) {
+                let tx = ARENA_X + Math.cos(a) * r;
+                let ty = ARENA_Y + Math.sin(a) * r;
 
                 let danger = 0;
                 bullets.forEach(b => {
                     let d = distPointToLine(tx, ty, b);
-                    if (d < 30) danger += (30 - d) * 5; // Phạt nặng nếu điểm này vẫn trúng đạn
+                    if (d < 35) danger += (35 - d) * 10;
                 });
 
-                // Ưu tiên điểm cực gần để lách xuyên qua thay vì chạy xa
-                let score = danger * 1000 + Math.hypot(tx - boss.x, ty - boss.y);
+                // TRỌNG TÂM: Điểm an toàn + Điểm gần trung tâm vòng tròn nhất
+                let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
+                let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
+                
+                // Score càng thấp càng tốt: Danger cao sẽ loại bỏ điểm đó, sau đó ưu tiên gần tâm, rồi mới đến gần boss
+                let score = danger * 2000 + distToCenter * 2 + distFromBoss;
+
                 if (score < minScore) {
                     minScore = score;
                     bestPoint = { x: tx, y: ty };
                 }
             }
         }
-        boss.targetX = bestPoint.x;
-        boss.targetY = bestPoint.y;
-        boss.isMoving = true;
+
+        // Chỉ di chuyển nếu điểm đến đủ tốt hoặc đang bị đe dọa
+        if (isDangerous || Math.hypot(boss.x - ARENA_X, boss.y - ARENA_Y) > 10) {
+            boss.targetX = bestPoint.x;
+            boss.targetY = bestPoint.y;
+            boss.isMoving = true;
+        } else {
+            boss.isMoving = false;
+        }
     }
 
     function update() {
@@ -95,7 +98,7 @@
             const dy = boss.targetY - boss.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 1.5) {
+            if (dist > 2) {
                 const angleToTarget = Math.atan2(dy, dx);
                 let diff = angleToTarget - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
@@ -104,14 +107,14 @@
                 let moveSpeed = 0;
                 let steerAmount = 0;
 
-                // THREADING LOGIC: Xoay trái/phải để tiến lên né xuyên qua nếu góc hẹp
+                // Xoay trái/tiến để né xuyên qua hoặc về tâm nhanh nhất
                 if (Math.abs(diff) <= Math.PI / 2) {
                     steerAmount = diff * 0.25;
-                    moveSpeed = 6.5;
+                    moveSpeed = 6;
                 } else {
                     let reverseDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
                     steerAmount = reverseDiff * 0.25;
-                    moveSpeed = -6.5;
+                    moveSpeed = -6;
                 }
 
                 boss.angle += steerAmount;
@@ -140,15 +143,14 @@
 
         // Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.strokeStyle = '#222'; ctx.stroke();
 
-        // Chỉ vẽ ĐƯỜNG KẺ quỹ đạo (Không màu đỏ)
-        ctx.lineWidth = 1;
+        // Quỹ đạo quỹ đạo mảnh
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
             ctx.lineTo(b.x + b.vx * 350, b.y + b.vy * 350);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
             ctx.stroke();
         });
 
