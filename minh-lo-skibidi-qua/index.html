@@ -3,36 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17 - Skill System</title>
+    <title>Boss AI v18 - Laser Warning</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; color: white; }
         canvas { display: block; }
-        #ui { position: fixed; top: 15px; left: 15px; pointer-events: none; z-index: 10; }
-        .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000; margin-bottom: 5px; }
-        #skill-btn { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); width: 80px; height: 80px; 
-                     background: #333; border: 3px solid #0f0; border-radius: 15px; display: flex; align-items: center; 
-                     justify-content: center; font-weight: bold; cursor: pointer; z-index: 20; }
-        #skill-menu { position: fixed; right: 110px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.9); 
-                      border: 1px solid #555; padding: 10px; display: none; flex-direction: column; gap: 10px; z-index: 20; }
-        .skill-opt { background: #222; padding: 10px; border: 1px solid #0f0; cursor: pointer; text-align: center; font-size: 12px; }
-        .skill-opt:hover { background: #0f0; color: #000; }
-        #coins-display { position: fixed; top: 15px; right: 15px; font-size: 20px; color: #ffd700; font-weight: bold; }
+        #ui-left { position: fixed; top: 15px; left: 15px; pointer-events: none; z-index: 10; }
+        #ui-right { position: fixed; top: 15px; right: 15px; text-align: right; z-index: 10; }
+        .stat { font-size: 22px; font-weight: bold; text-shadow: 2px 2px 4px #000; margin-bottom: 5px; }
+        #timer-container { position: fixed; top: 10%; left: 50%; transform: translateX(-50%); pointer-events: none; }
+        #timer { font-size: 40px; font-weight: 900; color: #ff3333; }
+        #skill-panel { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; }
+        .skill-btn { 
+            width: 70px; height: 70px; background: rgba(30, 30, 30, 0.9); border: 2px solid #0f0; 
+            border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: bold; text-align: center;
+        }
+        .skill-btn.laser { border-color: #ff00ff; color: #ff00ff; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div id="timer" class="stat" style="color: #0ff;">TIME: 60s</div>
-</div>
+<div id="ui-left"><div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div></div>
+<div id="ui-right"><div class="stat" style="color: #ffd700;">XU: <span id="coins">0</span></div></div>
+<div id="timer-container"><div id="timer">01:00</div></div>
 
-<div id="coins-display">XU: <span id="coins">0</span></div>
-
-<div id="skill-btn" onclick="toggleMenu()">KỸ NĂNG</div>
-<div id="skill-menu">
-    <div class="skill-opt" onclick="useSkill('laser')">LASER (Free)</div>
-    <div class="skill-opt" onclick="useSkill('5bullets')">5 VIÊN GẦN BOSS</div>
-    <div class="skill-opt" onclick="useSkill('static')">3 MÌN (5S)</div>
+<div id="skill-panel">
+    <div class="skill-btn laser" onclick="useSkill('laser')">LASER<br>(1S CHỜ)</div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -41,8 +37,8 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const hpTxt = document.getElementById('hp');
-    const timerTxt = document.getElementById('timer');
     const coinsTxt = document.getElementById('coins');
+    const timerTxt = document.getElementById('timer');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -54,51 +50,32 @@
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let bullets = [];
+    let lasers = []; // Quản lý laser đang chờ
     let timeLeft = 60;
-    let coins = parseInt(localStorage.getItem('tank_coins') || 0);
+    let coins = parseInt(localStorage.getItem('tankCoins') || 0);
     coinsTxt.innerText = coins;
 
-    // Timer logic
-    const gameTimer = setInterval(() => {
+    const timerInterval = setInterval(() => {
         timeLeft--;
-        timerTxt.innerText = `TIME: ${timeLeft}s`;
-        if (timeLeft <= 0) {
-            clearInterval(gameTimer);
-            alert("HẾT GIỜ! BẠN THUA.");
-            location.reload();
-        }
+        let s = timeLeft % 60;
+        timerTxt.innerText = `00:${s.toString().padStart(2, '0')}`;
+        if (timeLeft <= 0) { clearInterval(timerInterval); alert("HẾT GIỜ!"); location.reload(); }
     }, 1000);
-
-    function toggleMenu() {
-        const menu = document.getElementById('skill-menu');
-        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
-    }
 
     function useSkill(type) {
         if (type === 'laser') {
-            // Laser quét qua vị trí boss
             const angle = Math.atan2(boss.y - ARENA_Y, boss.x - ARENA_X);
-            for(let i=0; i<10; i++) {
-                bullets.push({ x: ARENA_X, y: ARENA_Y, vx: Math.cos(angle)*15, vy: Math.sin(angle)*15, isLaser: true });
-            }
-        } else if (type === '5bullets') {
-            for(let i=0; i<5; i++) {
-                let a = (Math.PI*2/5)*i;
-                bullets.push({ x: boss.x + Math.cos(a)*100, y: boss.y + Math.sin(a)*100, 
-                               vx: -Math.cos(a)*4, vy: -Math.sin(a)*4 });
-            }
-        } else if (type === 'static') {
-            for(let i=0; i<3; i++) {
-                let a = Math.random()*Math.PI*2;
-                let r = Math.random()*ARENA_RADIUS;
-                bullets.push({ x: ARENA_X + Math.cos(a)*r, y: ARENA_Y + Math.sin(a)*r, vx: 0, vy: 0, life: 300 });
-            }
+            // Thêm hiệu ứng báo trước
+            lasers.push({ 
+                x: ARENA_X, y: ARENA_Y, angle: angle, 
+                timer: 60, // 60 frames = 1 giây
+                active: false 
+            });
         }
-        toggleMenu();
     }
 
     window.addEventListener('pointerdown', (e) => {
-        if (e.clientX > canvas.width - 150) return; // Tránh chạm vào menu
+        if (e.clientX > canvas.width - 100) return;
         if (Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y) <= ARENA_RADIUS) return;
         setTimeout(() => {
             const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
@@ -106,22 +83,39 @@
         }, 500);
     });
 
+    function checkFutureCollision(testX, testY, futureFrames) {
+        for (let f = 1; f <= futureFrames; f++) {
+            // Kiểm tra đạn thường
+            for (let b of bullets) {
+                let fbX = b.x + b.vx * f;
+                let fbY = b.y + b.vy * f;
+                if (Math.hypot(testX - fbX, testY - fbY) < BOSS_HITBOX + 12) return true;
+            }
+            // Kiểm tra Laser sắp bắn (Dự báo đường thẳng)
+            for (let l of lasers) {
+                let dist = distToSegment(testX, testY, l.x, l.y, l.x + Math.cos(l.angle)*500, l.y + Math.sin(l.angle)*500);
+                if (dist < BOSS_HITBOX + 20) return true;
+            }
+        }
+        return false;
+    }
+
+    function distToSegment(px, py, x1, y1, x2, y2) {
+        let l2 = Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2);
+        let t = ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return Math.hypot(px - (x1 + t*(x2-x1)), py - (y1 + t*(y2-y1)));
+    }
+
     function findSafePath() {
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
-
         for (let a = 0; a < Math.PI * 2; a += Math.PI / 10) {
             for (let r = 0; r < ARENA_RADIUS - 20; r += 50) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
-                let score = 0;
-
-                bullets.forEach(b => {
-                    let d = Math.hypot(tx - b.x, ty - b.y);
-                    if (d < 40) score += 10000;
-                });
-
-                score += Math.hypot(tx - ARENA_X, ty - ARENA_Y) * 0.5 + Math.hypot(tx - boss.x, ty - boss.y);
+                let score = checkFutureCollision(tx, ty, 30) ? 2000000 : 0;
+                score += Math.hypot(tx - ARENA_X, ty - ARENA_Y) * 0.2 + Math.hypot(tx - boss.x, ty - boss.y);
                 if (score < minScore) { minScore = score; bestPoint = { x: tx, y: ty }; }
             }
         }
@@ -130,56 +124,59 @@
 
     function update() {
         findSafePath();
-        const dx = boss.targetX - boss.x; const dy = boss.targetY - boss.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 2) {
-            const angleToTarget = Math.atan2(dy, dx);
-            let diff = angleToTarget - boss.angle;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            boss.angle += diff * 0.2;
-            boss.x += Math.cos(boss.angle) * 6; boss.y += Math.sin(boss.angle) * 6;
+        boss.x += (boss.targetX - boss.x) * 0.1;
+        boss.y += (boss.targetY - boss.y) * 0.1;
+        boss.angle = Math.atan2(boss.targetY - boss.y, boss.targetX - boss.x);
+
+        // Cập nhật đạn
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i]; b.x += b.vx; b.y += b.vy;
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
+                boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
+                if (boss.hp <= 0) { coins += 10; localStorage.setItem('tankCoins', coins); alert("WIN!"); location.reload(); }
+            } else if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
         }
 
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            let b = bullets[i];
-            b.x += b.vx; b.y += b.vy;
-            if (b.life !== undefined) { b.life--; if(b.life <= 0) { bullets.splice(i,1); continue; } }
-            
-            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
-                boss.hp--; hpTxt.innerText = boss.hp;
-                bullets.splice(i, 1);
-                if (boss.hp <= 0) { 
-                    clearInterval(gameTimer);
-                    coins += 10;
-                    localStorage.setItem('tank_coins', coins);
-                    alert("THẮNG! +10 XU"); 
-                    location.reload(); 
+        // Cập nhật Laser
+        for (let i = lasers.length - 1; i >= 0; i--) {
+            let l = lasers[i];
+            l.timer--;
+            if (l.timer <= 0) {
+                // Phóng đạn laser thực sự
+                for(let j=0; j<15; j++) {
+                    bullets.push({ x: l.x, y: l.y, vx: Math.cos(l.angle)*(12+j), vy: Math.sin(l.angle)*(12+j), isLaser: true });
                 }
-                continue;
+                lasers.splice(i, 1);
             }
-            if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
         }
     }
 
     function draw() {
         ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Vẽ Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = '#222'; ctx.stroke();
+
+        // Vẽ cảnh báo Laser
+        lasers.forEach(l => {
+            ctx.beginPath();
+            ctx.moveTo(l.x, l.y);
+            ctx.lineTo(l.x + Math.cos(l.angle)*800, l.y + Math.sin(l.angle)*800);
+            ctx.strokeStyle = `rgba(255, 0, 255, ${0.1 + (1 - l.timer/60)*0.4})`;
+            ctx.setLineDash([10, 10]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
 
         // Boss
         ctx.save();
         ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
         ctx.fillStyle = '#ff3333'; ctx.fillRect(-18, -15, 36, 30);
-        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
         ctx.restore();
 
         // Đạn
         bullets.forEach(b => {
-            ctx.fillStyle = b.vx === 0 ? '#f0f' : '#0f0';
-            ctx.beginPath(); ctx.arc(b.x, b.y, b.isLaser ? 8 : 4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = b.isLaser ? '#ff00ff' : '#0f0';
+            ctx.beginPath(); ctx.arc(b.x, b.y, b.isLaser ? 6 : 4, 0, Math.PI*2); ctx.fill();
         });
 
         update();
