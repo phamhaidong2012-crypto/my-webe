@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17.0 - Divided Destiny</title>
+    <title>Boss AI v17.1 - Fixed Division</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -21,7 +21,7 @@
 
 <div id="ui">
     <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V26 | PHASE: <span id="phase-txt">NORMAL</span></div>
+    <div style="font-size: 10px;">CORE: CORTEX-V27 | PHASE: <span id="phase-txt">NORMAL</span></div>
 </div>
 <div id="timer">01:00</div>
 <div id="announcement">DIVIDING ARENA!</div>
@@ -45,7 +45,7 @@
     const BOSS_REAL_HITBOX = 5; 
     const SAFETY_BUFFER = 55;
 
-    let boss = { x: ARENA_X - 50, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X - 50, targetY: ARENA_Y };
+    let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let bullets = [];
     let mouseX = 0, mouseY = 0;
     let timeLeft = 60;
@@ -56,18 +56,17 @@
         timeLeft--;
         timerTxt.innerText = `00:${timeLeft.toString().padStart(2, '0')}`;
         
-        // Kích hoạt chia đôi vòng tròn sau 30 giây (khi timeLeft <= 30)
         if (timeLeft === 30 && !isDivided) {
             isDivided = true;
             phaseTxt.innerText = "DIVIDED";
-            announce.style(opacity = 1);
+            announce.style.opacity = 1;
             setTimeout(() => announce.style.opacity = 0, 2000);
             
-            // Nếu Boss đang ở bên phải, đẩy nó sang trái để tránh kẹt trong tường
-            if (boss.x > ARENA_X) boss.x = ARENA_X - 50;
+            // ÉP BOSS VỀ BÊN TRÁI NGAY LẬP TỨC
+            boss.targetX = ARENA_X - 100;
         }
 
-        if (timeLeft <= 0) { clearInterval(timerInterval); alert("HẾT GIỜ! BOSS CHIẾN THẮNG"); location.reload(); }
+        if (timeLeft <= 0) { clearInterval(timerInterval); alert("HẾT GIỜ! BOSS THẮNG"); location.reload(); }
     }, 1000);
 
     window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
@@ -87,13 +86,12 @@
 
     function getRiskAt(tx, ty) {
         let totalRisk = 0;
-        // 1. Kiểm tra giới hạn Arena
+        // Kiểm tra giới hạn Arena
         if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) return 1000000;
         
-        // 2. Kiểm tra tường chia đôi (Nếu Phase 2 kích hoạt, Boss chỉ được ở bên trái ARENA_X)
-        if (isDivided && tx > ARENA_X - 10) return 1000000;
+        // Kiểm tra tường: Sau 30s, bất kỳ điểm nào bên phải ARENA_X đều là vùng chết
+        if (isDivided && tx > ARENA_X - 15) return 1000000;
 
-        // 3. Kiểm tra rủi ro từ đạn (Giữ nguyên logic né đạn 1000%)
         for (let b of bullets) {
             let dx = b.vx, dy = b.vy;
             let num = Math.abs(dx * (b.y - ty) - (b.x - tx) * dy);
@@ -110,6 +108,14 @@
 
     function solveAI() {
         const now = Date.now();
+        
+        // Nếu đang trong quá trình chia tách và boss còn ở bên phải, ép nó di chuyển trái
+        if (isDivided && boss.x > ARENA_X - 20) {
+            boss.targetX = ARENA_X - 100;
+            boss.targetY = ARENA_Y;
+            return;
+        }
+
         let currentDestRisk = getRiskAt(boss.targetX, boss.targetY);
         if (currentDestRisk < 500 && now - lastDecisionTime < 150) return;
 
@@ -122,7 +128,7 @@
             let ty = boss.y + Math.sin(ang) * 95;
 
             let score = getRiskAt(tx, ty);
-            score += Math.hypot(tx - ARENA_X, ty - ARENA_Y) * 1.5;
+            score += Math.hypot(tx - (ARENA_X - 100), ty - ARENA_Y) * 0.5; // Ưu tiên đứng giữa nửa bên trái
 
             if (score < bestScore) {
                 bestScore = score;
@@ -160,7 +166,7 @@
 
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
-                if (boss.hp <= 0) { alert("HỆ THỐNG AI SỤP ĐỔ - BẠN THẮNG!"); location.reload(); }
+                if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
             } else if (b.x < -1000 || b.x > canvas.width+1000) bullets.splice(i, 1);
         }
     }
@@ -168,23 +174,19 @@
     function draw() {
         ctx.fillStyle = '#020202'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Vẽ vòng tròn Arena
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = isDivided ? '#ff3333' : '#111'; 
         ctx.lineWidth = 3; ctx.stroke();
 
-        // Vẽ tường chia đôi (Nếu Phase 2)
         if (isDivided) {
             ctx.beginPath();
             ctx.moveTo(ARENA_X, ARENA_Y - ARENA_RADIUS);
             ctx.lineTo(ARENA_X, ARENA_Y + ARENA_RADIUS);
             ctx.strokeStyle = '#ff3333';
-            ctx.setLineDash([10, 10]); // Nét đứt năng lượng
+            ctx.setLineDash([10, 5]);
             ctx.stroke();
             ctx.setLineDash([]);
-            
-            // Phủ mờ bên phải để báo hiệu vùng cấm
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.08)';
             ctx.beginPath();
             ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, -Math.PI/2, Math.PI/2);
             ctx.fill();
