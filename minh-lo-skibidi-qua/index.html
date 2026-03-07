@@ -3,22 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v16.8 - Anti-Vibration</title>
+    <title>Boss AI v16.9 - Final Masterpiece</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
         .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; }
         #timer { position: fixed; top: 15px; right: 15px; font-size: 30px; color: #f33; font-weight: 900; }
+        #hint { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); color: rgba(0,255,0,0.5); font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V26 | ANTI-JITTER: ENABLED | SMOOTH_LERP: ON</div>
+    <div style="font-size: 10px;">CORE: CORTEX-V26 | FINAL VERSION | 100% STABLE</div>
 </div>
 <div id="timer">01:00</div>
+<div id="hint">CLICK HOẶC NHẤN [SPACE] ĐỂ BẮN</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -36,27 +38,48 @@
     const ARENA_Y = canvas.height / 2;
     
     const BOSS_REAL_HITBOX = 5; 
-    const SAFETY_BUFFER = 55; // Vùng an toàn rộng
+    const SAFETY_BUFFER = 55;
 
     let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
     let bullets = [];
+    let mouseX = 0, mouseY = 0;
     let timeLeft = 60;
     let lastDecisionTime = 0;
 
     const timerInterval = setInterval(() => {
         timeLeft--;
         timerTxt.innerText = `00:${timeLeft.toString().padStart(2, '0')}`;
-        if (timeLeft <= 0) { clearInterval(timerInterval); alert("WIN!"); location.reload(); }
+        if (timeLeft <= 0) { clearInterval(timerInterval); alert("HẾT GIỜ! BOSS THẮNG"); location.reload(); }
     }, 1000);
 
-    window.addEventListener('pointerdown', (e) => {
-        if (Math.hypot(e.clientX - ARENA_X, e.clientY - ARENA_Y) <= ARENA_RADIUS) return;
-        const angle = Math.atan2(boss.y - e.clientY, boss.x - e.clientX);
+    // Cập nhật tọa độ chuột để phím Space biết bắn vào đâu
+    window.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    });
+
+    function fireBullet() {
+        if (Math.hypot(mouseX - ARENA_X, mouseY - ARENA_Y) <= ARENA_RADIUS) return;
+        const angle = Math.atan2(boss.y - mouseY, boss.x - mouseX);
         bullets.push({ 
-            x: e.clientX, y: e.clientY, 
+            x: mouseX, y: mouseY, 
             vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, 
             charge: 30, active: false 
         });
+    }
+
+    // CLICK CHUỘT ĐỂ BẮN
+    window.addEventListener('pointerdown', (e) => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        fireBullet();
+    });
+
+    // PHÍM SPACE ĐỂ BẮN
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault(); // Tránh cuộn trang
+            fireBullet();
+        }
     });
 
     function getRiskAt(tx, ty) {
@@ -78,18 +101,16 @@
 
     function solveAI() {
         const now = Date.now();
-        // Chống rung: Chỉ tính toán lại nếu mục tiêu hiện tại bị đe dọa hoặc sau 150ms
         let currentDestRisk = getRiskAt(boss.targetX, boss.targetY);
         if (currentDestRisk < 500 && now - lastDecisionTime < 150) return;
 
         let bestScore = getRiskAt(boss.x, boss.y);
         let bestP = { x: boss.x, y: boss.y };
 
-        // Quét tìm đường sống
         for (let i = 0; i < 48; i++) {
             let ang = (i / 48) * Math.PI * 2;
-            let tx = boss.x + Math.cos(ang) * 90;
-            let ty = boss.y + Math.sin(ang) * 90;
+            let tx = boss.x + Math.cos(ang) * 95;
+            let ty = boss.y + Math.sin(ang) * 95;
 
             if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) continue;
 
@@ -117,15 +138,13 @@
 
         if (d > 3) {
             let targetAngle = Math.atan2(dy, dx);
-            // Làm mượt góc quay
             let diff = targetAngle - boss.angle;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
             boss.angle += diff * 0.15;
 
-            // Di chuyển mượt (LERP-like)
-            boss.x += Math.cos(boss.angle) * 8.5;
-            boss.y += Math.sin(boss.angle) * 8.5;
+            boss.x += Math.cos(boss.angle) * 8.8;
+            boss.y += Math.sin(boss.angle) * 8.8;
         }
 
         for (let i = bullets.length - 1; i >= 0; i--) {
@@ -135,20 +154,20 @@
 
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
-                if (boss.hp <= 0) { alert("HỆ THỐNG AI SỤP ĐỔ - BẠN THẮNG!"); location.reload(); }
-            } else if (b.x < -600 || b.x > canvas.width+600) bullets.splice(i, 1);
+                if (boss.hp <= 0) { alert("BẠN ĐÃ CHIẾN THẮNG!"); location.reload(); }
+            } else if (b.x < -1000 || b.x > canvas.width+1000) bullets.splice(i, 1);
         }
     }
 
     function draw() {
         ctx.fillStyle = '#020202'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
-        ctx.strokeStyle = '#111'; ctx.stroke();
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.stroke();
 
         bullets.forEach(b => {
             ctx.beginPath(); ctx.moveTo(b.x, b.y);
             ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
-            ctx.strokeStyle = 'rgba(0, 255, 0, 0.12)'; 
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)'; 
             ctx.stroke();
             if (!b.active) {
                 ctx.beginPath(); ctx.arc(b.x, b.y, b.charge/2+5, 0, Math.PI*2);
