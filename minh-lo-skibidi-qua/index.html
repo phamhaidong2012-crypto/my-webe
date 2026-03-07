@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v12 - Survival Instinct</title>
+    <title>Boss AI v13 - Multi-Threat Intelligence</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #0f0;">SURVIVAL MODE: ON | MICRO-DODGING</div>
+    <div style="font-size: 11px; color: #0f0;">MULTI-THREAT AWARENESS: ACTIVE</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -53,23 +53,26 @@
         let bestPoint = { x: boss.x, y: boss.y };
         let minScore = Infinity;
 
-        // Quét lưới mật độ cao để tìm khe hở
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
-            for (let r = 0; r < ARENA_RADIUS - 20; r += 30) {
+        // Quét tìm điểm tối ưu nhất trong không gian đa đạn
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 15) {
+            for (let r = 0; r < ARENA_RADIUS - 20; r += 35) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
 
-                let danger = 0;
+                let totalDanger = 0;
                 bullets.forEach(b => {
                     let d = distPointToLine(tx, ty, b);
-                    if (d < 35) danger += (35 - d) * 100;
+                    // Phạt cực nặng nếu điểm này chạm vào bất kỳ quỹ đạo đạn nào
+                    if (d < 45) {
+                        totalDanger += Math.pow(45 - d, 2); 
+                    }
                 });
 
                 let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
                 let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
                 
-                // Trọng số mới: Ưu tiên thoát hiểm tuyệt đối, bỏ qua việc chạy về tâm nếu đang có đạn
-                let score = danger * 1000 + distToCenter * 0.5 + distFromBoss;
+                // Score = (Nguy hiểm tổng hợp * trọng số lớn) + Khoảng cách di chuyển + Ưu tiên tâm
+                let score = (totalDanger * 500) + (distFromBoss * 1.2) + (distToCenter * 0.8);
 
                 if (score < minScore) {
                     minScore = score;
@@ -78,7 +81,6 @@
             }
         }
 
-        // Luôn cập nhật target để Boss không bị kẹt
         boss.targetX = bestPoint.x;
         boss.targetY = bestPoint.y;
         boss.isMoving = true;
@@ -92,20 +94,22 @@
             const dy = boss.targetY - boss.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 1) {
+            if (dist > 1.2) {
                 const angleToTarget = Math.atan2(dy, dx);
                 let diff = angleToTarget - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
 
-                let moveSpeed = 6.5;
+                let moveSpeed = 6.8;
+                let steerSpeed = 0.28;
+
                 if (Math.abs(diff) > Math.PI / 2) {
                     let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                    boss.angle += revDiff * 0.25;
-                    moveSpeed = -6.5;
+                    boss.angle += revDiff * steerSpeed;
+                    moveSpeed = -6.8;
                 } else {
-                    boss.angle += diff * 0.25;
-                    moveSpeed = 6.5;
+                    boss.angle += diff * steerSpeed;
+                    moveSpeed = 6.8;
                 }
 
                 boss.x += Math.cos(boss.angle) * moveSpeed;
@@ -119,7 +123,7 @@
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp;
                 bullets.splice(i, 1);
-                if (boss.hp <= 0) { alert("VICTORY!"); location.reload(); }
+                if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
                 continue;
             }
             if (b.x < -100 || b.x > canvas.width+100 || b.y < -100 || b.y > canvas.height+100) bullets.splice(i, 1);
@@ -128,14 +132,16 @@
 
     function draw() {
         ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x + b.vx * 400, b.y + b.vy * 400);
-            ctx.strokeStyle = 'rgba(0, 255, 100, 0.2)';
+            ctx.lineTo(b.x + b.vx * 450, b.y + b.vy * 450);
+            ctx.strokeStyle = 'rgba(0, 255, 120, 0.15)';
+            ctx.lineWidth = 1;
             ctx.stroke();
         });
 
