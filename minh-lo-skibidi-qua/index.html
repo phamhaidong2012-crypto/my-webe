@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v8 - Center Control</title>
+    <title>Boss AI v9 - Precision Tank</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -15,7 +15,7 @@
 
 <div id="ui">
     <div class="stat">MÁU BOSS: <span id="hp" style="color: #ff3333;">3</span></div>
-    <div style="font-size: 11px; color: #0af;">POSITIONING: CENTER PRIORITY</div>
+    <div style="font-size: 11px; color: #0f0;">GREEN TRAJECTORY SYSTEM: ACTIVE</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -49,29 +49,27 @@
     }
 
     function findSafePath() {
-        let isDangerous = bullets.some(b => distPointToLine(boss.x, boss.y, b) < 35);
-        
-        let bestPoint = { x: ARENA_X, y: ARENA_Y }; // Mặc định muốn về tâm
+        let isDangerous = bullets.some(b => distPointToLine(boss.x, boss.y, b) < 32);
+        let bestPoint = { x: ARENA_X, y: ARENA_Y };
         let minScore = Infinity;
 
-        // Nếu an toàn, Boss chỉ nhẹ nhàng quay về tâm. Nếu nguy hiểm, Boss ưu tiên né.
+        // Quét tìm vị trí an toàn, ưu tiên gần tâm để tránh bị ép góc
         for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
-            for (let r = 0; r < ARENA_RADIUS - 25; r += 40) {
+            for (let r = 0; r < ARENA_RADIUS - 20; r += 35) {
                 let tx = ARENA_X + Math.cos(a) * r;
                 let ty = ARENA_Y + Math.sin(a) * r;
 
                 let danger = 0;
                 bullets.forEach(b => {
                     let d = distPointToLine(tx, ty, b);
-                    if (d < 35) danger += (35 - d) * 10;
+                    if (d < 35) danger += (35 - d);
                 });
 
-                // TRỌNG TÂM: Điểm an toàn + Điểm gần trung tâm vòng tròn nhất
                 let distToCenter = Math.hypot(tx - ARENA_X, ty - ARENA_Y);
                 let distFromBoss = Math.hypot(tx - boss.x, ty - boss.y);
                 
-                // Score càng thấp càng tốt: Danger cao sẽ loại bỏ điểm đó, sau đó ưu tiên gần tâm, rồi mới đến gần boss
-                let score = danger * 2000 + distToCenter * 2 + distFromBoss;
+                // Trọng số score: Né đạn > Về tâm > Khoảng cách di chuyển
+                let score = danger * 5000 + distToCenter * 3 + distFromBoss;
 
                 if (score < minScore) {
                     minScore = score;
@@ -80,8 +78,7 @@
             }
         }
 
-        // Chỉ di chuyển nếu điểm đến đủ tốt hoặc đang bị đe dọa
-        if (isDangerous || Math.hypot(boss.x - ARENA_X, boss.y - ARENA_Y) > 10) {
+        if (isDangerous || Math.hypot(boss.x - ARENA_X, boss.y - ARENA_Y) > 15) {
             boss.targetX = bestPoint.x;
             boss.targetY = bestPoint.y;
             boss.isMoving = true;
@@ -98,26 +95,26 @@
             const dy = boss.targetY - boss.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 2) {
+            if (dist > 1.5) {
                 const angleToTarget = Math.atan2(dy, dx);
                 let diff = angleToTarget - boss.angle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
 
-                let moveSpeed = 0;
-                let steerAmount = 0;
+                // Xoay xe để né: Nếu góc lệch lớn, xoay tại chỗ nhanh hơn rồi mới chạy
+                let steerSpeed = 0.25;
+                let moveSpeed = 6;
 
-                // Xoay trái/tiến để né xuyên qua hoặc về tâm nhanh nhất
-                if (Math.abs(diff) <= Math.PI / 2) {
-                    steerAmount = diff * 0.25;
-                    moveSpeed = 6;
-                } else {
-                    let reverseDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
-                    steerAmount = reverseDiff * 0.25;
+                if (Math.abs(diff) > Math.PI / 2) {
+                    // Ưu tiên lùi nếu điểm đến ở sau lưng để né nhanh nhất
+                    let revDiff = diff > 0 ? diff - Math.PI : diff + Math.PI;
+                    boss.angle += revDiff * steerSpeed;
                     moveSpeed = -6;
+                } else {
+                    boss.angle += diff * steerSpeed;
+                    moveSpeed = 6;
                 }
 
-                boss.angle += steerAmount;
                 boss.x += Math.cos(boss.angle) * moveSpeed;
                 boss.y += Math.sin(boss.angle) * moveSpeed;
             } else {
@@ -141,30 +138,31 @@
     function draw() {
         ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Arena
+        // Arena Circle
         ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
         ctx.strokeStyle = '#222'; ctx.stroke();
 
-        // Quỹ đạo quỹ đạo mảnh
+        // Đường quỹ đạo xanh lá sáng (Bright Green Trajectory)
+        ctx.lineWidth = 1;
         bullets.forEach(b => {
             ctx.beginPath();
             ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x + b.vx * 350, b.y + b.vy * 350);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineTo(b.x + b.vx * 400, b.y + b.vy * 400);
+            ctx.strokeStyle = 'rgba(0, 255, 100, 0.25)'; // Xanh lá sáng
             ctx.stroke();
         });
 
-        // Vẽ Boss
+        // Boss Tank
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
-        ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
-        ctx.fillStyle = boss.hp === 1 ? '#ff00ff' : '#ff3333';
-        ctx.fillRect(-18, -15, 36, 30);
-        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8);
+        ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10); // Xích
+        ctx.fillStyle = (boss.hp === 1) ? '#ff00ff' : '#ff3333';
+        ctx.fillRect(-18, -15, 36, 30); // Thân
+        ctx.fillStyle = '#000'; ctx.fillRect(0, -4, 25, 8); // Nòng
         ctx.restore();
 
-        // Vẽ đạn
+        // Bullets
         ctx.fillStyle = '#0f0';
         bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
 
