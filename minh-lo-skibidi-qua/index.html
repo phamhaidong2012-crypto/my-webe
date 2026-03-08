@@ -1,306 +1,188 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<title>Tank Maze v36.2 - Stable Physics</title>
-
-<style>
-body{margin:0;overflow:hidden;background:#000;font-family:'Segoe UI',sans-serif;}
-canvas{display:block;}
-#ui{position:fixed;top:15px;left:15px;color:#0f0;background:rgba(0,0,0,0.8);padding:12px;border-radius:8px;border:1px solid #0f0;}
-</style>
+    <meta charset="UTF-8">
+    <title>Tank Maze v34.0 - Hardcore Space Only</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; border: 1px solid #0f0; }
+    </style>
 </head>
-
 <body>
 
 <div id="ui">
-<div style="color:#0ff;font-size:11px;margin-bottom:5px;">CORE: v36.2</div>
-<div>TANK HP: <span id="p-hp">5</span></div>
-<div>BOSS HP: <span id="b-hp">7</span></div>
-<div style="font-size:10px;color:#aaa;margin-top:5px;">MOUSE=MOVE | SPACE=FIRE</div>
+    <div style="color: #0ff; font-size: 11px; margin-bottom: 5px;">CORE: v34.0 - SPACE_TO_FIRE</div>
+    <div>TANK HP: <span id="p-hp" style="color:#0f0">5</span></div>
+    <div>BOSS HP: <span id="b-hp" style="color:#f05; font-weight:bold;">7</span></div>
+    <div style="font-size: 10px; color: #aaa; margin-top:5px;">CONTROL: MOUSE=MOVE | SPACE=FIRE</div>
 </div>
-
-<div id="msg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-color:#fff;font-size:60px;display:none;text-shadow:0 0 20px #0f0;font-weight:bold;"></div>
-
+<div id="msg" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 60px; display: none; text-shadow: 0 0 20px #0f0; font-weight: bold; z-index:100;"></div>
 <canvas id="gameCanvas"></canvas>
 
 <script>
-
-const canvas=document.getElementById('gameCanvas');
-const ctx=canvas.getContext('2d');
-
-const pHPText=document.getElementById('p-hp');
-const bHPText=document.getElementById('b-hp');
-const msg=document.getElementById('msg');
-
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
-
-const GRID=90;
-const B_SPEED=3.2;
-const P_SPEED=4.5;
-
-const COLS=Math.floor(canvas.width/GRID);
-const ROWS=Math.floor(canvas.height/GRID);
-
-let maze=[];
-
-for(let r=0;r<ROWS;r++){
-maze[r]=[];
-for(let c=0;c<COLS;c++)
-maze[r][c]={c,r,walls:[true,true,true,true],v:false};
-}
-
-function genMaze(){
-
-let curr=maze[0][0];
-let stack=[];
-curr.v=true;
-
-while(true){
-
-let neighbors=[];
-let {c,r}=curr;
-
-[[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d=>{
-let n=maze[r+d[1]] && maze[r+d[1]][c+d[0]];
-if(n && !n.v) neighbors.push({cell:n,w1:d[2],w2:d[3]});
-});
-
-if(neighbors.length){
-
-let next=neighbors[Math.floor(Math.random()*neighbors.length)];
-
-next.cell.v=true;
-stack.push(curr);
-
-curr.walls[next.w1]=false;
-next.cell.walls[next.w2]=false;
-
-curr=next.cell;
-
-}else if(stack.length){
-
-curr=stack.pop();
-
-}else break;
-
-}
-
-}
-
-genMaze();
-
-let player={x:GRID/2,y:GRID/2,a:0,hp:5};
-let boss={x:(COLS-1)*GRID+GRID/2,y:(ROWS-1)*GRID+GRID/2,a:0,hp:7};
-
-let bullets=[];
-let mouse={x:0,y:0,down:false};
-let gameOver=false;
-
-function checkWall(x,y){
-
-let cx=Math.floor(x/GRID);
-let cy=Math.floor(y/GRID);
-
-if(!maze[cy] || !maze[cy][cx]) return {hit:true};
-
-let b=22;
-let rx=x%GRID;
-let ry=y%GRID;
-
-if(maze[cy][cx].walls[0] && ry<b) return {hit:true,axis:'y'};
-if(maze[cy][cx].walls[1] && rx>GRID-b) return {hit:true,axis:'x'};
-if(maze[cy][cx].walls[2] && ry>GRID-b) return {hit:true,axis:'y'};
-if(maze[cy][cx].walls[3] && rx<b) return {hit:true,axis:'x'};
-
-return {hit:false};
-
-}
-
-function fire(obj,color,owner){
-
-let muzzle=34;
-
-bullets.push({
-x:obj.x+Math.cos(obj.a)*muzzle,
-y:obj.y+Math.sin(obj.a)*muzzle,
-vx:Math.cos(obj.a)*8,
-vy:Math.sin(obj.a)*8,
-c:color,
-o:owner,
-t:Date.now()
-});
-
-}
-
-window.onmousemove=e=>{
-mouse.x=e.clientX;
-mouse.y=e.clientY;
-};
-
-window.onmousedown=()=>mouse.down=true;
-window.onmouseup=()=>mouse.down=false;
-
-window.onkeydown=e=>{
-if(e.code==='Space' && !gameOver)
-fire(player,'#0f0','p');
-};
-
-function bossAI(){
-
-let angle=Math.atan2(player.y-boss.y,player.x-boss.x);
-
-let diff=angle-boss.a;
-
-while(diff>Math.PI) diff-=Math.PI*2;
-while(diff<-Math.PI) diff+=Math.PI*2;
-
-boss.a+=diff*0.08;
-
-let moveX=Math.cos(angle)*B_SPEED;
-let moveY=Math.sin(angle)*B_SPEED;
-
-if(!checkWall(boss.x+moveX,boss.y).hit)
-boss.x+=moveX;
-
-if(!checkWall(boss.x,boss.y+moveY).hit)
-boss.y+=moveY;
-
-if(Math.random()<0.03)
-fire(boss,'#f05','b');
-
-}
-
-function update(){
-
-if(gameOver) return;
-
-bossAI();
-
-player.a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
-
-if(mouse.down){
-
-let nx=player.x+Math.cos(player.a)*P_SPEED;
-let ny=player.y+Math.sin(player.a)*P_SPEED;
-
-if(!checkWall(nx,player.y).hit) player.x=nx;
-if(!checkWall(player.x,ny).hit) player.y=ny;
-
-}
-
-bullets.forEach((b,i)=>{
-
-for(let s=0;s<4;s++){
-
-let nextX=b.x+b.vx/4;
-let nextY=b.y+b.vy/4;
-
-let wx=checkWall(nextX,b.y);
-let wy=checkWall(b.x,nextY);
-
-if(wx.hit){
-b.vx*=-1;
-b.x+=b.vx*0.5;
-}
-
-else b.x=nextX;
-
-if(wy.hit){
-b.vy*=-1;
-b.y+=b.vy*0.5;
-}
-
-else b.y=nextY;
-
-}
-
-if(Math.hypot(b.x-boss.x,b.y-boss.y)<22 && b.o==='p'){
-boss.hp--;
-bullets.splice(i,1);
-if(boss.hp<=0) endGame("WIN!");
-}
-
-if(Math.hypot(b.x-player.x,b.y-player.y)<22 && b.o==='b'){
-player.hp--;
-bullets.splice(i,1);
-if(player.hp<=0) endGame("LOSE!");
-}
-
-if(Date.now()-b.t>6000) bullets.splice(i,1);
-
-});
-
-pHPText.innerText=player.hp;
-bHPText.innerText=boss.hp;
-
-}
-
-function endGame(s){
-gameOver=true;
-msg.innerText=s;
-msg.style.display='block';
-setTimeout(()=>location.reload(),3000);
-}
-
-function draw(){
-
-ctx.fillStyle='#000';
-ctx.fillRect(0,0,canvas.width,canvas.height);
-
-ctx.strokeStyle='#222';
-ctx.lineWidth=2;
-
-maze.forEach(r=>r.forEach(c=>{
-
-let x=c.c*GRID;
-let y=c.r*GRID;
-
-ctx.beginPath();
-
-if(c.walls[0]){ctx.moveTo(x,y);ctx.lineTo(x+GRID,y);}
-if(c.walls[1]){ctx.moveTo(x+GRID,y);ctx.lineTo(x+GRID,y+GRID);}
-if(c.walls[2]){ctx.moveTo(x+GRID,y+GRID);ctx.lineTo(x,y+GRID);}
-if(c.walls[3]){ctx.moveTo(x,y+GRID);ctx.lineTo(x,y);}
-
-ctx.stroke();
-
-}));
-
-ctx.save();
-ctx.translate(player.x,player.y);
-ctx.rotate(player.a);
-ctx.fillStyle='#0f0';
-ctx.fillRect(-18,-18,36,36);
-ctx.fillStyle='#fff';
-ctx.fillRect(10,-4,22,8);
-ctx.restore();
-
-ctx.save();
-ctx.translate(boss.x,boss.y);
-ctx.rotate(boss.a);
-ctx.fillStyle='#f05';
-ctx.fillRect(-22,-22,44,44);
-ctx.fillStyle='#fff';
-ctx.fillRect(12,-6,28,12);
-ctx.restore();
-
-bullets.forEach(b=>{
-ctx.fillStyle=b.c;
-ctx.beginPath();
-ctx.arc(b.x,b.y,7,0,7);
-ctx.fill();
-});
-
-update();
-requestAnimationFrame(draw);
-
-}
-
-draw();
-
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), msg = document.getElementById('msg');
+
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const GRID = 90, B_SPEED = 7.2, P_SPEED = 4.5;
+    const COLS = Math.floor(canvas.width / GRID), ROWS = Math.floor(canvas.height / GRID);
+
+    let maze = [];
+    for (let r = 0; r < ROWS; r++) {
+        maze[r] = [];
+        for (let c = 0; c < COLS; c++) maze[r][c] = { c, r, walls: [true, true, true, true], v: false };
+    }
+
+    function genMaze() {
+        let curr = maze[0][0], stack = []; curr.v = true;
+        while(true) {
+            let neighbors = [], {c, r} = curr;
+            [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d => {
+                let n = maze[r+d[1]] && maze[r+d[1]][c+d[0]];
+                if (n && !n.v) neighbors.push({cell: n, w1: d[2], w2: d[3]});
+            });
+            if (neighbors.length > 0) {
+                let next = neighbors[Math.floor(Math.random()*neighbors.length)];
+                next.cell.v = true; stack.push(curr);
+                curr.walls[next.w1] = false; next.cell.walls[next.w2] = false; curr = next.cell;
+            } else if (stack.length > 0) curr = stack.pop(); else break;
+        }
+    }
+    genMaze();
+
+    let player = { x: GRID/2, y: GRID/2, a: 0, hp: 5 };
+    let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 7 };
+    let bullets = [], mouse = { x: 0, y: 0, down: false }, gameOver = false;
+
+    function checkWall(x, y) {
+        let cx = Math.floor(x/GRID), cy = Math.floor(y/GRID);
+        if(!maze[cy] || !maze[cy][cx]) return { hit: true };
+        let b = 22, rx = x % GRID, ry = y % GRID;
+        if(maze[cy][cx].walls[0] && ry < b) return { hit: true, axis: 'y' };
+        if(maze[cy][cx].walls[1] && rx > GRID-b) return { hit: true, axis: 'x' };
+        if(maze[cy][cx].walls[2] && ry > GRID-b) return { hit: true, axis: 'y' };
+        if(maze[cy][cx].walls[3] && rx < b) return { hit: true, axis: 'x' };
+        return { hit: false };
+    }
+
+    function findPath() {
+        let start = {c: Math.floor(boss.x/GRID), r: Math.floor(boss.y/GRID)};
+        let target = {c: Math.floor(player.x/GRID), r: Math.floor(player.y/GRID)};
+        let q = [[start]], visited = new Set([`${start.c},${start.r}`]);
+        while(q.length > 0) {
+            let path = q.shift(), curr = path[path.length-1];
+            if(curr.c === target.c && curr.r === target.r) return path[1] || path[0];
+            [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d => {
+                if(maze[curr.r] && maze[curr.r][curr.c] && !maze[curr.r][curr.c].walls[d[2]]) {
+                    let nc = curr.c+d[0], nr = curr.r+d[1];
+                    if(maze[nr] && maze[nr][nc] && !visited.has(`${nc},${nr}`)) {
+                        visited.add(`${nc},${nr}`); q.push([...path, {c: nc, r: nr}]);
+                    }
+                }
+            });
+        }
+        return start;
+    }
+
+    function fire(obj, color, owner) {
+        bullets.push({ x: obj.x, y: obj.y, vx: Math.cos(obj.a)*8, vy: Math.sin(obj.a)*8, c: color, o: owner, t: Date.now() });
+    }
+
+    // --- KHÓA CHỨC NĂNG BẮN BẰNG CHUỘT ---
+    window.onmousemove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
+    window.onmousedown = () => { mouse.down = true; }; // Chỉ dùng để di chuyển
+    window.onmouseup = () => { mouse.down = false; };
+    
+    // --- CHỈ CHO PHÉP BẮN BẰNG SPACE ---
+    window.onkeydown = (e) => { 
+        if(e.code === 'Space' && !gameOver) fire(player, '#0f0', 'p'); 
+    };
+
+    function update() {
+        if(gameOver) return;
+        
+        // Player
+        player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        if(mouse.down) { // Chỉ di chuyển khi đè chuột, không bắn
+            let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
+            if(!checkWall(nx, player.y).hit) player.x = nx;
+            if(!checkWall(player.x, ny).hit) player.y = ny;
+        }
+
+        // BOSS AI: NO STRATEGY SLIDE - ONLY ROTATION & PATH
+        let next = findPath();
+        let targetX = next.c * GRID + GRID/2, targetY = next.r * GRID + GRID/2;
+        
+        // Boss di chuyển thẳng theo đường mê cung (Không lướt ngang)
+        let angleToTarget = Math.atan2(targetY - boss.y, targetX - boss.x);
+        let bnx = boss.x + Math.cos(angleToTarget) * (B_SPEED * 0.4);
+        let bny = boss.y + Math.sin(angleToTarget) * (B_SPEED * 0.4);
+        
+        if(!checkWall(bnx, bny).hit) {
+            boss.x = bnx; boss.y = bny;
+        }
+
+        // BOSS XOAY XE NÉ ĐẠN TẠI CHỖ
+        let nearestBullet = bullets.filter(b=>b.o==='p').sort((a,b)=>Math.hypot(boss.x-a.x, boss.y-a.y) - Math.hypot(boss.x-b.x, boss.y-b.y))[0];
+        if(nearestBullet && Math.hypot(boss.x - nearestBullet.x, boss.y - nearestBullet.y) < 100) {
+            let bulletAngle = Math.atan2(nearestBullet.vy, nearestBullet.vx);
+            // Xoay thân xe vuông góc với đạn để đạn xẹt qua sườn
+            boss.a += (bulletAngle + Math.PI/2 - boss.a) * 0.25;
+        } else {
+            let angleToPlayer = Math.atan2(player.y - boss.y, player.x - boss.x);
+            boss.a += (angleToPlayer - boss.a) * 0.1;
+        }
+
+        if(Math.random() < 0.02) fire(boss, '#f05', 'b');
+
+        // Bullets
+        bullets.forEach((b, i) => {
+            for(let s=0; s<4; s++) {
+                b.x += b.vx/4; b.y += b.vy/4;
+                let w = checkWall(b.x, b.y);
+                if(w.hit) {
+                    if(w.axis === 'x') b.vx *= -1; else b.vy *= -1;
+                    b.x += b.vx*0.5; b.y += b.vy*0.5;
+                    break;
+                }
+            }
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 22 && b.o==='p') { boss.hp--; bullets.splice(i, 1); if(boss.hp<=0) endGame("WIN!"); }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 22 && b.o==='b') { player.hp--; bullets.splice(i, 1); if(player.hp<=0) endGame("LOSE!"); }
+            if(Date.now() - b.t > 6000) bullets.splice(i, 1);
+        });
+        pHPText.innerText = player.hp; bHPText.innerText = boss.hp;
+    }
+
+    function endGame(s) { gameOver = true; msg.innerText = s; msg.style.display = 'block'; setTimeout(()=>location.reload(), 3000); }
+
+    function draw() {
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+        maze.forEach(r => r.forEach(c => {
+            let x = c.c*GRID, y = c.r*GRID;
+            ctx.beginPath();
+            if(c.walls[0]) { ctx.moveTo(x,y); ctx.lineTo(x+GRID,y); }
+            if(c.walls[1]) { ctx.moveTo(x+GRID,y); ctx.lineTo(x+GRID,y+GRID); }
+            if(c.walls[2]) { ctx.moveTo(x+GRID,y+GRID); ctx.lineTo(x,y+GRID); }
+            if(c.walls[3]) { ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); }
+            ctx.stroke();
+        }));
+
+        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
+        ctx.fillStyle = '#0f0'; ctx.fillRect(-18,-18,36,36); ctx.fillStyle = '#fff'; ctx.fillRect(10,-4,22,8); ctx.restore();
+
+        ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
+        ctx.fillStyle = '#f05'; ctx.fillRect(-22,-22,44,44); ctx.fillStyle = '#fff'; ctx.fillRect(12,-6,28,12); ctx.restore();
+
+        bullets.forEach(b => {
+            ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill();
+        });
+
+        update(); requestAnimationFrame(draw);
+    }
+    draw();
 </script>
 </body>
 </html>
