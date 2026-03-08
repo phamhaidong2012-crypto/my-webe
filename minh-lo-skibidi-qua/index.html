@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17.4 - Laser Countermeasure</title>
+    <title>Boss AI v17.5 - Convergence FX</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
@@ -25,7 +25,7 @@
 
 <div id="ui">
     <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V29 | LASER_SYSTEM: READY</div>
+    <div style="font-size: 10px;">CORE: CORTEX-V29 | FX_SYSTEM: ADVANCED</div>
 </div>
 
 <div id="shield-ui">
@@ -77,6 +77,7 @@
     // Logic Laser
     let laserCharge = 0; // 0: Không có, 1: Có sẵn, 2: Đang chuẩn bị, 3: Đang bắn
     let laserTimer = 0;
+    let laserParticles = []; // Hạt hội tụ cho Laser
 
     setInterval(() => {
         gameTime++;
@@ -98,6 +99,21 @@
         bossBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(angle) * 8, vy: Math.sin(angle) * 8, blocked: isBlocked });
     }
 
+    // Tạo hạt hội tụ cho Laser
+    function createLaserParticles() {
+        for (let i = 0; i < 30; i++) {
+            let ang = Math.random() * Math.PI * 2;
+            let dist = 100 + Math.random() * 50;
+            laserParticles.push({
+                x: TOWER.x + Math.cos(ang) * dist,
+                y: TOWER.y + Math.sin(ang) * dist,
+                ang: ang,
+                speed: 2 + Math.random() * 2,
+                life: 60 // Tồn tại 1 giây
+            });
+        }
+    }
+
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space') { e.preventDefault(); fireBullet(); }
         if (e.code === 'KeyN' && !nPressed && isGathering) {
@@ -106,6 +122,7 @@
         if (e.code === 'Digit1' && laserCharge === 1) {
             laserCharge = 2; // Chuẩn bị bắn
             laserTimer = 60; // 1 giây (60 frames)
+            createLaserParticles();
         }
     });
 
@@ -116,7 +133,13 @@
     function fireBullet() {
         if (Math.hypot(mouseX - ARENA_X, mouseY - ARENA_Y) <= ARENA_RADIUS) return;
         const angle = Math.atan2(boss.y - mouseY, boss.x - mouseX);
-        bullets.push({ x: mouseX, y: mouseY, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, charge: 30, active: false });
+        bullets.push({ 
+            x: mouseX, y: mouseY, 
+            vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, 
+            charge: 30, // 0.5s nạp
+            initialCharge: 30,
+            active: false 
+        });
     }
 
     function getRiskAt(tx, ty) {
@@ -171,7 +194,17 @@
         // Logic Laser Update
         if (laserCharge === 2) {
             laserTimer--;
-            if (laserTimer <= 0) { laserCharge = 3; laserTimer = 180; } // Bắn trong 3 giây
+            // Update hạt hội tụ Laser
+            laserParticles.forEach((p, i) => {
+                let dx = TOWER.x - p.x;
+                let dy = TOWER.y - p.y;
+                let dist = Math.hypot(dx, dy);
+                p.x += (dx / dist) * p.speed;
+                p.y += (dy / dist) * p.speed;
+                p.life--;
+                if (dist < 5 || p.life <= 0) laserParticles.splice(i, 1);
+            });
+            if (laserTimer <= 0) { laserCharge = 3; laserTimer = 180; laserParticles = []; } // Bắn trong 3 giây
         } else if (laserCharge === 3) {
             laserTimer--;
             // Boss dính Laser
@@ -181,13 +214,16 @@
                     if (boss.hp <= 0) { alert("LASER TIÊU DIỆT BOSS!"); location.reload(); }
                 }
             }
-            if (laserTimer <= 0) { laserCharge = 0; laserStatus.innerText = "LOCKED"; laserStatus.style.color = "#f00"; }
+            if (laserTimer <= 0) { laserCharge = 0; laserStatus.innerText = "LOCKED"; laserStatus.style.color = "#f0f"; }
         }
 
         if (isGathering) gatherRadius -= 150 / (3 * 60);
 
         bullets.forEach((b, i) => {
-            if (b.charge > 0) { b.charge--; if (b.charge <= 0) b.active = true; }
+            if (b.charge > 0) { 
+                b.charge--; 
+                if (b.charge <= 0) b.active = true; 
+            }
             if (b.active) { b.x += b.vx; b.y += b.vy; }
             if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
                 boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
@@ -215,15 +251,22 @@
         ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.stroke();
 
         // Vẽ Laser
-        if (laserCharge === 2) { // Đường chỉ thị
+        if (laserCharge === 2) { // Hội tụ (Vòng tròn đỏ + Hạt đỏ)
+            ctx.beginPath(); ctx.arc(TOWER.x, TOWER.y, Math.max(0, laserTimer * 2.5), 0, Math.PI*2);
+            ctx.strokeStyle = '#f00'; ctx.lineWidth = 3; ctx.stroke();
+            
+            ctx.fillStyle = '#f00';
+            laserParticles.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+            });
+            
+            // Đường chỉ thị mờ
             ctx.beginPath(); ctx.moveTo(TOWER.x, TOWER.y); ctx.lineTo(TOWER.x, 0);
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.1)'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
         } else if (laserCharge === 3) { // Laser thực sự
             ctx.shadowBlur = 25; ctx.shadowColor = '#f00';
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(TOWER.x - 10, 0, 20, TOWER.y); // Thân laser 20px
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.fillRect(TOWER.x - 15, 0, 30, TOWER.y); // Quầng sáng rộng hơn
+            ctx.fillStyle = '#fff'; ctx.fillRect(TOWER.x - 10, 0, 20, TOWER.y); // Thân laser 20px
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; ctx.fillRect(TOWER.x - 15, 0, 30, TOWER.y); // Quầng sáng rộng hơn
             ctx.shadowBlur = 0;
         }
 
@@ -238,7 +281,15 @@
             ctx.strokeStyle = '#f0f'; ctx.lineWidth = 2; ctx.stroke();
         }
 
+        // Đạn người chơi + FX hội tụ xanh lá
         bullets.forEach(b => {
+            if (!b.active) { // Vẽ vòng hội tụ khi đang nạp
+                ctx.beginPath(); 
+                ctx.arc(b.x, b.y, Math.max(0, b.charge / b.initialCharge * 20 + 5), 0, Math.PI*2);
+                ctx.strokeStyle = '#0f0'; ctx.lineWidth = 2; ctx.stroke();
+            }
+            
+            // Vẽ đường dự đoán
             ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
             ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)'; ctx.stroke();
             ctx.fillStyle = b.active ? '#0f0' : '#333';
