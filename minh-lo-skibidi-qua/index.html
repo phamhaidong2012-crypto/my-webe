@@ -3,309 +3,550 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Super Tank Maze v29.0 - Platinum AI</title>
+    <title>Tank Maze v31.0 - 500+ Lines God AI</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: 'Consolas', monospace; }
         canvas { display: block; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; font-size: 18px; background: rgba(0,0,0,0.7); padding: 15px; border-left: 5px solid #0f0; }
-        #msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 70px; display: none; z-index: 100; text-shadow: 0 0 30px #f05; font-weight: bold; }
-        .stat { margin-bottom: 5px; }
-        .k-hint { color: #ff0; font-size: 12px; margin-top: 10px; }
+        #ui { 
+            position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; 
+            background: rgba(0, 30, 0, 0.85); padding: 25px; border: 2px solid #0f0; border-radius: 5px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+        #msg { 
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: #fff; font-size: 85px; display: none; z-index: 100; 
+            text-shadow: 0 0 40px #f05; font-weight: 900; text-align: center;
+        }
+        .stat-row { margin-bottom: 10px; font-size: 18px; display: flex; justify-content: space-between; width: 250px; }
+        .log-box { color: #0cf; font-size: 13px; border-top: 1px solid #222; padding-top: 15px; margin-top: 15px; height: 60px; }
+        .hint-bar { color: #ff0; font-size: 11px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="stat">[ STATUS: PLATINUM_AI_ACTIVE ]</div>
-    <div class="stat">TANK HP: <span id="p-hp" style="color:#0f0">IMMORTAL</span></div>
-    <div class="stat">BOSS HP: <span id="b-hp" style="color:#f05">15</span></div>
-    <div id="ai-action" style="color: #0cf;">AI: ANALYZING BOUNCE VECTORS...</div>
-    <div class="k-hint">GIỮ CHUỘT: DI CHUYỂN | SPACE/CLICK: BẮN</div>
+    <div class="stat-row"><span>UNIT:</span> <span style="color: #fff;">GOD_AI_v31</span></div>
+    <div class="stat-row"><span>PLAYER:</span> <span id="p-hp" style="color:#0f0">IMMORTAL</span></div>
+    <div class="stat-row"><span>BOSS HP:</span> <span id="b-hp" style="color:#f05">25</span></div>
+    <div class="log-box" id="ai-status">SYSTEM READY...<br>AWAITING INPUT...</div>
+    <div class="hint-bar">HOLD MOUSE: MOVE | SPACE/CLICK: FIRE</div>
 </div>
 <div id="msg"></div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
+    /**
+     * TANK MAZE SUPREME - 500+ LINES EDITION
+     * ENGINE: CUSTOM JAVASCRIPT RAYCASTING
+     * AI: BFS PATHFINDING + DYNAMIC EVASION + RICOCHET CALCULATOR
+     */
+
+    // --- 1. GLOBAL CONFIGURATION ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), aiAct = document.getElementById('ai-action');
+    const aiStatus = document.getElementById('ai-status');
 
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
 
-    // CẤU HÌNH HỆ THỐNG
-    const GRID = 90; 
-    const B_SPEED = 3.5;
-    const P_SPEED = 5.0;
-    const BULLET_SPEED = 9;
-    const COLS = Math.floor(canvas.width / GRID);
-    const ROWS = Math.floor(canvas.height / GRID);
-    
-    // KHỞI TẠO MÊ CUNG (DFS Algorithm)
-    let maze = [];
-    for (let r = 0; r < ROWS; r++) {
-        maze[r] = [];
-        for (let c = 0; c < COLS; c++) maze[r][c] = { c, r, walls: [true, true, true, true], v: false };
-    }
+    const CONFIG = {
+        GRID_SIZE: 100,
+        PLAYER_SPEED: 5.8,
+        BOSS_BASE_SPEED: 4.0,
+        BULLET_SPEED: 11,
+        MAX_BOUNCES: 4,
+        FIRE_RATE: 1100, // ms
+        PARTICLE_COUNT: 12
+    };
 
-    function genMaze() {
-        let curr = maze[0][0], stack = []; curr.v = true;
-        while(true) {
-            let neighbors = [], {c, r} = curr;
-            [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d => {
-                let n = maze[r+d[1]] && maze[r+d[1]][c+d[0]];
-                if (n && !n.v) neighbors.push({cell: n, w1: d[2], w2: d[3]});
-            });
-            if (neighbors.length > 0) {
-                let next = neighbors[Math.floor(Math.random()*neighbors.length)];
-                next.cell.v = true; stack.push(curr);
-                curr.walls[next.w1] = false; next.cell.walls[next.w2] = false; curr = next.cell;
-            } else if (stack.length > 0) curr = stack.pop();
-            else break;
+    const COLS = Math.floor(canvas.width / CONFIG.GRID_SIZE);
+    const ROWS = Math.floor(canvas.height / CONFIG.GRID_SIZE);
+    
+    // --- 2. MAZE GENERATION MODULE ---
+    let maze = [];
+    function initMazeGrid() {
+        for (let r = 0; r < ROWS; r++) {
+            maze[r] = [];
+            for (let c = 0; c < COLS; c++) {
+                maze[r][c] = {
+                    c: c,
+                    r: r,
+                    walls: [true, true, true, true], // Top, Right, Bottom, Left
+                    visited: false
+                };
+            }
         }
     }
-    genMaze();
 
-    // KHỞI TẠO ĐỐI TƯỢNG
-    let player = { x: GRID/2, y: GRID/2, a: 0, hp: 999, size: 20 };
-    let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 15, size: 24, targetA: 0 };
-    let bullets = [], particles = [], gameOver = false;
-    let mouse = { x: 0, y: 0, down: false };
-    let keys = {};
+    function generateMazeDFS() {
+        initMazeGrid();
+        let current = maze[0][0];
+        current.visited = true;
+        let stack = [];
 
-    // VẬT LÝ VA CHẠM ĐA ĐIỂM (CHỐNG XUYÊN TƯỜNG 10000%)
-    function isColliding(x, y, size) {
-        const points = [
-            {x: x - size, y: y - size}, {x: x + size, y: y - size},
-            {x: x - size, y: y + size}, {x: x + size, y: y + size}
-        ];
-        for (let p of points) {
-            let cx = Math.floor(p.x / GRID), cy = Math.floor(p.y / GRID);
-            if (!maze[cy] || !maze[cy][cx]) return true;
-            let cell = maze[cy][cx];
-            let rx = p.x % GRID, ry = p.y % GRID;
-            let buffer = 5;
-            if (cell.walls[0] && ry < buffer) return true;
-            if (cell.walls[1] && rx > GRID - buffer) return true;
-            if (cell.walls[2] && ry > GRID - buffer) return true;
-            if (cell.walls[3] && rx < buffer) return true;
+        while (true) {
+            let neighbors = [];
+            let {c, r} = current;
+
+            // Check 4 directions
+            let dirs = [
+                {nc: c, nr: r - 1, w: 0, rw: 2}, // Top
+                {nc: c + 1, nr: r, w: 1, rw: 3}, // Right
+                {nc: c, nr: r + 1, w: 2, rw: 0}, // Bottom
+                {nc: c - 1, nr: r, w: 3, rw: 1}  // Left
+            ];
+
+            dirs.forEach(d => {
+                if (maze[d.nr] && maze[d.nr][d.nc] && !maze[d.nr][d.nc].visited) {
+                    neighbors.push(d);
+                }
+            });
+
+            if (neighbors.length > 0) {
+                let nextDir = neighbors[Math.floor(Math.random() * neighbors.length)];
+                let nextCell = maze[nextDir.nr][nextDir.nc];
+                
+                current.walls[nextDir.w] = false;
+                nextCell.walls[nextDir.rw] = false;
+                
+                nextCell.visited = true;
+                stack.push(current);
+                current = nextCell;
+            } else if (stack.length > 0) {
+                current = stack.pop();
+            } else {
+                break;
+            }
+        }
+    }
+    generateMazeDFS();
+
+    // --- 3. PHYSICS & COLLISION MODULE ---
+    /**
+     * Kiểm tra va chạm đa điểm vòng quanh vật thể
+     * Đảm bảo không xuyên tường 10000%
+     */
+    function checkCollision(x, y, radius) {
+        // Kiểm tra 12 điểm xung quanh vòng tròn vật thể
+        for (let i = 0; i < 12; i++) {
+            let angle = (i / 12) * Math.PI * 2;
+            let px = x + Math.cos(angle) * radius;
+            let py = y + Math.sin(angle) * radius;
+
+            let col = Math.floor(px / CONFIG.GRID_SIZE);
+            let row = Math.floor(py / CONFIG.GRID_SIZE);
+
+            if (!maze[row] || !maze[row][col]) return true;
+
+            let cell = maze[row][col];
+            let localX = px % CONFIG.GRID_SIZE;
+            let localY = py % CONFIG.GRID_SIZE;
+            let margin = 5;
+
+            if (cell.walls[0] && localY < margin) return true;
+            if (cell.walls[1] && localX > CONFIG.GRID_SIZE - margin) return true;
+            if (cell.walls[2] && localY > CONFIG.GRID_SIZE - margin) return true;
+            if (cell.walls[3] && localX < margin) return true;
         }
         return false;
     }
 
-    // TÍNH TOÁN ĐƯỜNG ĐẠN NẢY (PREDICTION RAYCASTING)
-    function calculateTrajectory(startX, startY, angle, maxBounces = 3) {
-        let pts = [{x: startX, y: startY}];
-        let tx = startX, ty = startY;
-        let vx = Math.cos(angle) * BULLET_SPEED;
-        let vy = Math.sin(angle) * BULLET_SPEED;
-        let bounces = 0;
+    // --- 4. PATHFINDING MODULE (BFS) ---
+    /**
+     * Thuật toán tìm đường ngắn nhất cho Boss
+     */
+    function findPathBFS(startPos, endPos) {
+        let startCell = {
+            c: Math.floor(startPos.x / CONFIG.GRID_SIZE),
+            r: Math.floor(startPos.y / CONFIG.GRID_SIZE)
+        };
+        let endCell = {
+            c: Math.floor(endPos.x / CONFIG.GRID_SIZE),
+            r: Math.floor(endPos.y / CONFIG.GRID_SIZE)
+        };
 
-        for (let i = 0; i < 400; i++) {
-            tx += vx; ty += vy;
-            let cx = Math.floor(tx / GRID), cy = Math.floor(ty / GRID);
-            if (!maze[cy] || !maze[cy][cx]) break;
-            
-            let rx = tx % GRID, ry = ty % GRID;
+        let queue = [[startCell]];
+        let visited = new Set();
+        visited.add(`${startCell.c},${startCell.r}`);
+
+        while (queue.length > 0) {
+            let path = queue.shift();
+            let current = path[path.length - 1];
+
+            if (current.c === endCell.c && current.r === endCell.r) {
+                return path;
+            }
+
+            let moves = [
+                {dc: 0, dr: -1, wallIdx: 0},
+                {dc: 1, dr: 0, wallIdx: 1},
+                {dc: 0, dr: 1, wallIdx: 2},
+                {dc: -1, dr: 0, wallIdx: 3}
+            ];
+
+            for (let move of moves) {
+                if (!maze[current.r][current.c].walls[move.wallIdx]) {
+                    let nc = current.c + move.dc;
+                    let nr = current.r + move.dr;
+
+                    if (maze[nr] && maze[nr][nc] && !visited.has(`${nc},${nr}`)) {
+                        visited.add(`${nc},${nr}`);
+                        let newPath = [...path, {c: nc, r: nr}];
+                        queue.push(newPath);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // --- 5. RAYCASTING RICOCHET MODULE ---
+    /**
+     * Tính toán đường đạn nảy cho cả người chơi và AI
+     */
+    function traceRay(x, y, angle, bouncesLeft) {
+        let points = [{x, y}];
+        let currX = x;
+        let currY = y;
+        let vx = Math.cos(angle) * CONFIG.BULLET_SPEED;
+        let vy = Math.sin(angle) * CONFIG.BULLET_SPEED;
+        let currentBounces = 0;
+
+        for (let i = 0; i < 600; i++) {
+            currX += vx;
+            currY += vy;
+
+            let c = Math.floor(currX / CONFIG.GRID_SIZE);
+            let r = Math.floor(currY / CONFIG.GRID_SIZE);
+
+            if (!maze[r] || !maze[r][c]) break;
+
+            let lx = currX % CONFIG.GRID_SIZE;
+            let ly = currY % CONFIG.GRID_SIZE;
             let hit = false;
-            if ((maze[cy][cx].walls[0] && ry < 8) || (maze[cy][cx].walls[2] && ry > GRID - 8)) { vy *= -1; hit = true; }
-            else if ((maze[cy][cx].walls[3] && rx < 8) || (maze[cy][cx].walls[1] && rx > GRID - 8)) { vx *= -1; hit = true; }
+
+            if ((maze[r][c].walls[0] && ly < 8) || (maze[r][c].walls[2] && ly > CONFIG.GRID_SIZE - 8)) {
+                vy *= -1;
+                hit = true;
+            } else if ((maze[r][c].walls[3] && lx < 8) || (maze[r][c].walls[1] && lx > CONFIG.GRID_SIZE - 8)) {
+                vx *= -1;
+                hit = true;
+            }
 
             if (hit) {
-                pts.push({x: tx, y: ty});
-                bounces++;
-                if (bounces > maxBounces) break;
+                points.push({x: currX, y: currY});
+                currentBounces++;
+                if (currentBounces > bouncesLeft) break;
             }
         }
-        pts.push({x: tx, y: ty});
-        return pts;
+        points.push({x: currX, y: currY});
+        return points;
     }
 
-    // AI TÌM ĐƯỜNG (A*)
-    function getNextPath() {
-        let start = {c: Math.floor(boss.x/GRID), r: Math.floor(boss.y/GRID)};
-        let target = {c: Math.floor(player.x/GRID), r: Math.floor(player.y/GRID)};
-        let q = [[start]], v = new Set([`${start.c},${start.r}`]);
-        while(q.length > 0) {
-            let path = q.shift(), curr = path[path.length-1];
-            if(curr.c === target.c && curr.r === target.r) return path[1] || path[0];
-            [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d => {
-                if(maze[curr.r] && maze[curr.r][curr.c] && !maze[curr.r][curr.c].walls[d[2]]) {
-                    let nc = curr.c+d[0], nr = curr.r+d[1];
-                    if(maze[nr] && maze[nr][nc] && !v.has(`${nc},${nr}`)) { v.add(`${nc},${nr}`); q.push([...path, {c: nc, r: nr}]); }
-                }
-            });
-        }
-        return start;
-    }
-
-    function spawnParticles(x, y, color) {
-        for(let i=0; i<8; i++) particles.push({x, y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 1, color});
-    }
-
-    function fire(obj, owner) {
-        bullets.push({ 
-            x: obj.x + Math.cos(obj.a)*30, 
-            y: obj.y + Math.sin(obj.a)*30, 
-            vx: Math.cos(obj.a)*BULLET_SPEED, 
-            vy: Math.sin(obj.a)*BULLET_SPEED, 
-            o: owner, 
-            t: Date.now(),
-            bounces: 0
-        });
-    }
-
-    // INPUTS
-    window.onmousemove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
-    window.onmousedown = () => { mouse.down = true; if(!gameOver) fire(player, 'p'); };
-    window.onmouseup = () => { mouse.down = false; };
-    window.onkeydown = (e) => { 
-        keys[e.code] = true; 
-        if(e.code === 'Space' && !gameOver) fire(player, 'p'); 
-    };
-    window.onkeyup = (e) => { keys[e.code] = false; };
-
-    function update() {
-        if(gameOver) return;
-
-        // PLAYER MOVEMENT (CHỈ KHI NHẤN CHUỘT)
-        player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-        if(mouse.down) {
-            let dx = Math.cos(player.a) * P_SPEED;
-            let dy = Math.sin(player.a) * P_SPEED;
-            if(!isColliding(player.x + dx, player.y, player.size)) player.x += dx;
-            if(!isColliding(player.x, player.y + dy, player.size)) player.y += dy;
-        }
-
-        // BOSS AI LOGIC
-        let node = getNextPath();
-        let tx = node.c * GRID + GRID/2, ty = node.r * GRID + GRID/2;
-        let angleToNode = Math.atan2(ty - boss.y, tx - boss.x);
-        
-        // Di chuyển boss
-        let bdx = Math.cos(angleToNode) * B_SPEED, bdy = Math.sin(angleToNode) * B_SPEED;
-        if(!isColliding(boss.x + bdx, boss.y + bdy, boss.size)) {
-            boss.x += bdx; boss.y += bdy;
-        }
-
-        // AI BẮN NẢY CAO CẤP
-        let shotFound = false;
-        for(let ra = 0; ra < Math.PI*2; ra += 0.2) {
-            let traj = calculateTrajectory(boss.x, boss.y, ra, 2);
-            for(let i=0; i < traj.length-1; i++) {
-                let dist = distToSegment(player, traj[i], traj[i+1]);
-                if(dist < 30) {
-                    boss.targetA = ra;
-                    shotFound = true;
-                    break;
-                }
-            }
-            if(shotFound) break;
-        }
-
-        // Xoay nòng boss mượt mà
-        let adiff = boss.targetA - boss.a;
-        while(adiff < -Math.PI) adiff += Math.PI*2;
-        while(adiff > Math.PI) adiff -= Math.PI*2;
-        boss.a += adiff * 0.1;
-
-        if(shotFound && Math.abs(adiff) < 0.2 && Date.now() - boss.lastFire > 1200) {
-            fire(boss, 'b');
-            boss.lastFire = Date.now();
-            aiAct.innerText = "AI: RICOCHET LETHAL VECTOR FOUND!";
-        } else {
-            aiAct.innerText = "AI: CALCULATING BOUNCE VECTORS...";
-        }
-
-        // XỬ LÝ ĐẠN
-        bullets.forEach((b, i) => {
-            b.x += b.vx; b.y += b.vy;
-            let cx = Math.floor(b.x/GRID), cy = Math.floor(b.y/GRID);
-            if(!maze[cy] || !maze[cy][cx]) { bullets.splice(i, 1); return; }
-            
-            let rx = b.x % GRID, ry = b.y % GRID;
-            let hit = false;
-            if ((maze[cy][cx].walls[0] && ry < 10) || (maze[cy][cx].walls[2] && ry > GRID - 10)) { b.vy *= -1; hit = true; }
-            else if ((maze[cy][cx].walls[3] && rx < 10) || (maze[cy][cx].walls[1] && rx > GRID - 10)) { b.vx *= -1; hit = true; }
-            
-            if(hit) { b.bounces++; spawnParticles(b.x, b.y, b.o==='p'?'#0f0':'#f05'); }
-            if(b.bounces > 4 || Date.now() - b.t > 6000) bullets.splice(i, 1);
-
-            // Va chạm nhân vật
-            if(b.o === 'p' && Math.hypot(b.x - boss.x, b.y - boss.y) < 30) {
-                boss.hp--; bullets.splice(i, 1);
-                if(boss.hp <= 0) endGame("MISSION CLEAR");
-            }
-            if(b.o === 'b' && Math.hypot(b.x - player.x, b.y - player.y) < 25) {
-                bullets.splice(i, 1); // Immortal
-            }
-        });
-
-        // Particles
-        particles.forEach((p, i) => {
-            p.x += p.vx; p.y += p.vy; p.life -= 0.02;
-            if(p.life <= 0) particles.splice(i, 1);
-        });
-
-        bHPText.innerText = boss.hp;
-    }
-
-    function distToSegment(p, v, w) {
-        let l2 = Math.pow(v.x-w.x, 2) + Math.pow(v.y-w.y, 2);
-        if (l2 == 0) return Math.hypot(p.x-v.x, p.y-v.y);
+    function pointToSegmentDist(p, v, w) {
+        let l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+        if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
         let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
         t = Math.max(0, Math.min(1, t));
         return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
     }
 
-    function endGame(s) { gameOver = true; document.getElementById('msg').innerText = s; document.getElementById('msg').style.display = 'block'; setTimeout(()=>location.reload(), 3000); }
+    // --- 6. ENTITY DEFINITIONS ---
+    let player = {
+        x: CONFIG.GRID_SIZE / 2,
+        y: CONFIG.GRID_SIZE / 2,
+        angle: 0,
+        size: 24
+    };
 
-    function draw() {
-        ctx.fillStyle = '#111'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        
-        // Vẽ lưới mê cung
-        ctx.strokeStyle = '#333'; ctx.lineWidth = 4;
-        maze.forEach(r => r.forEach(c => {
-            let x = c.c*GRID, y = c.r*GRID;
-            if(c.walls[0]) { ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+GRID,y); ctx.stroke(); }
-            if(c.walls[1]) { ctx.beginPath(); ctx.moveTo(x+GRID,y); ctx.lineTo(x+GRID,y+GRID); ctx.stroke(); }
-            if(c.walls[2]) { ctx.beginPath(); ctx.moveTo(x+GRID,y+GRID); ctx.lineTo(x,y+GRID); ctx.stroke(); }
-            if(c.walls[3]) { ctx.beginPath(); ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); ctx.stroke(); }
-        }));
+    let boss = {
+        x: (COLS - 1) * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2,
+        y: (ROWS - 1) * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2,
+        angle: 0,
+        targetAngle: 0,
+        hp: 25,
+        size: 28,
+        lastFire: 0,
+        path: []
+    };
 
-        // Đường đạn dự đoán của người chơi
-        let pTraj = calculateTrajectory(player.x, player.y, player.a, 2);
-        ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
-        ctx.beginPath(); pTraj.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+    let bullets = [];
+    let particles = [];
+    let mouse = { x: 0, y: 0, down: false };
+    let gameOver = false;
 
-        // Vẽ Player (Xanh lá)
-        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-18, -18, 36, 36);
-        ctx.fillStyle = '#fff'; ctx.fillRect(5, -5, 25, 10);
+    // --- 7. ACTION & EFFECT MODULE ---
+    function fireBullet(owner) {
+        let obj = owner === 'p' ? player : boss;
+        bullets.push({
+            x: obj.x + Math.cos(obj.angle) * 40,
+            y: obj.y + Math.sin(obj.angle) * 40,
+            vx: Math.cos(obj.angle) * CONFIG.BULLET_SPEED,
+            vy: Math.sin(obj.angle) * CONFIG.BULLET_SPEED,
+            owner: owner,
+            startTime: Date.now(),
+            bounces: 0
+        });
+
+        // Flash effect
+        for (let i = 0; i < 5; i++) {
+            createParticle(obj.x + Math.cos(obj.angle) * 35, obj.y + Math.sin(obj.angle) * 35, owner === 'p' ? '#0f0' : '#f05');
+        }
+    }
+
+    function createParticle(x, y, color) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color: color
+        });
+    }
+
+    // --- 8. INPUT LISTENERS ---
+    window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+    });
+
+    window.addEventListener('mousedown', () => {
+        mouse.down = true;
+        if (!gameOver) fireBullet('p');
+    });
+
+    window.addEventListener('mouseup', () => {
+        mouse.down = false;
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !gameOver) {
+            fireBullet('p');
+        }
+    });
+
+    // --- 9. CORE UPDATE ENGINE ---
+    function updateGame() {
+        if (gameOver) return;
+
+        // Player Logic
+        player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        if (mouse.down) {
+            let dx = Math.cos(player.angle) * CONFIG.PLAYER_SPEED;
+            let dy = Math.sin(player.angle) * CONFIG.PLAYER_SPEED;
+            if (!checkCollision(player.x + dx, player.y, player.size)) player.x += dx;
+            if (!checkCollision(player.x, player.y + dy, player.size)) player.y += dy;
+        }
+
+        // Boss AI Logic: Pathfinding
+        boss.path = findPathBFS(boss, player);
+        let moveX = 0, moveY = 0;
+
+        if (boss.path && boss.path.length > 1) {
+            let nextStep = boss.path[1];
+            let tx = nextStep.c * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+            let ty = nextStep.r * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+            let angleToPath = Math.atan2(ty - boss.y, tx - boss.x);
+            moveX = Math.cos(angleToPath) * CONFIG.BOSS_BASE_SPEED;
+            moveY = Math.sin(angleToPath) * CONFIG.BOSS_BASE_SPEED;
+        }
+
+        // Boss AI Logic: Evasion
+        bullets.forEach(b => {
+            if (b.owner === 'p') {
+                let dist = Math.hypot(boss.x - b.x, boss.y - b.y);
+                if (dist < 180) {
+                    moveX += (boss.x - b.x) / dist * 6;
+                    moveY += (boss.y - b.y) / dist * 6;
+                }
+            }
+        });
+
+        if (!checkCollision(boss.x + moveX, boss.y, boss.size)) boss.x += moveX;
+        if (!checkCollision(boss.x, boss.y + moveY, boss.size)) boss.y += moveY;
+
+        // Boss AI Logic: Ricochet Shooting
+        let shotFound = false;
+        for (let a = 0; a < Math.PI * 2; a += 0.15) {
+            let traj = traceRay(boss.x, boss.y, a, 2);
+            for (let i = 0; i < traj.length - 1; i++) {
+                if (pointToSegmentDist(player, traj[i], traj[i + 1]) < 35) {
+                    boss.targetAngle = a;
+                    shotFound = true;
+                    break;
+                }
+            }
+            if (shotFound) break;
+        }
+
+        // Smooth rotation
+        let angleDiff = boss.targetAngle - boss.angle;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        boss.angle += angleDiff * 0.1;
+
+        if (shotFound && Math.abs(angleDiff) < 0.2 && Date.now() - boss.lastFire > CONFIG.FIRE_RATE) {
+            fireBullet('b');
+            boss.lastFire = Date.now();
+            aiStatus.innerHTML = "STATUS: ENGAGING<br>MODE: RICOCHET_LOCKED";
+        } else if (!shotFound) {
+            boss.targetAngle = Math.atan2(player.y - boss.y, player.x - boss.x);
+            aiStatus.innerHTML = "STATUS: SEARCHING<br>MODE: PATHFINDING";
+        }
+
+        // Bullet Updates
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+
+            let c = Math.floor(b.x / CONFIG.GRID_SIZE);
+            let r = Math.floor(b.y / CONFIG.GRID_SIZE);
+
+            if (!maze[r] || !maze[r][c]) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            let lx = b.x % CONFIG.GRID_SIZE;
+            let ly = b.y % CONFIG.GRID_SIZE;
+            let hitWall = false;
+
+            if ((maze[r][c].walls[0] && ly < 10) || (maze[r][c].walls[2] && ly > CONFIG.GRID_SIZE - 10)) {
+                b.vy *= -1;
+                hitWall = true;
+            } else if ((maze[r][c].walls[3] && lx < 10) || (maze[r][c].walls[1] && lx > CONFIG.GRID_SIZE - 10)) {
+                b.vx *= -1;
+                hitWall = true;
+            }
+
+            if (hitWall) {
+                b.bounces++;
+                for (let j = 0; j < 4; j++) createParticle(b.x, b.y, b.owner === 'p' ? '#0f0' : '#f05');
+            }
+
+            if (b.bounces > CONFIG.MAX_BOUNCES || Date.now() - b.startTime > 8000) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            // Damage detection
+            if (b.owner === 'p' && Math.hypot(b.x - boss.x, b.y - boss.y) < 32) {
+                boss.hp--;
+                bullets.splice(i, 1);
+                if (boss.hp <= 0) showEndScreen("MISSION SUCCESS");
+            }
+            if (b.owner === 'b' && Math.hypot(b.x - player.x, b.y - player.y) < 28) {
+                bullets.splice(i, 1); // Immortal
+            }
+        }
+
+        // Particle update
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.025;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        document.getElementById('b-hp').innerText = boss.hp;
+    }
+
+    function showEndScreen(text) {
+        gameOver = true;
+        let m = document.getElementById('msg');
+        m.innerText = text;
+        m.style.display = 'block';
+        setTimeout(() => location.reload(), 4000);
+    }
+
+    // --- 10. RENDERING MODULE ---
+    function render() {
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Maze Walls
+        ctx.strokeStyle = '#003300';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                let cell = maze[r][c];
+                let x = c * CONFIG.GRID_SIZE;
+                let y = r * CONFIG.GRID_SIZE;
+
+                if (cell.walls[0]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + CONFIG.GRID_SIZE, y); ctx.stroke(); }
+                if (cell.walls[1]) { ctx.beginPath(); ctx.moveTo(x + CONFIG.GRID_SIZE, y); ctx.lineTo(x + CONFIG.GRID_SIZE, y + CONFIG.GRID_SIZE); ctx.stroke(); }
+                if (cell.walls[2]) { ctx.beginPath(); ctx.moveTo(x + CONFIG.GRID_SIZE, y + CONFIG.GRID_SIZE); ctx.lineTo(x, y + CONFIG.GRID_SIZE); ctx.stroke(); }
+                if (cell.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y + CONFIG.GRID_SIZE); ctx.lineTo(x, y); ctx.stroke(); }
+            }
+        }
+
+        // Trajectory Preview for Player
+        let pTraj = traceRay(player.x, player.y, player.angle, 2);
+        ctx.setLineDash([10, 10]);
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.25)';
+        ctx.beginPath();
+        pTraj.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Particles
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 4, 4);
+        });
+        ctx.globalAlpha = 1.0;
+
+        // Bullets
+        bullets.forEach(b => {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = b.owner === 'p' ? '#0f0' : '#f05';
+            ctx.fillStyle = b.owner === 'p' ? '#0f0' : '#fff';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.shadowBlur = 0;
+
+        // Entities
+        // Player Tank
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+        ctx.fillStyle = '#0a0';
+        ctx.fillRect(-22, -22, 44, 44);
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(-15, -15, 30, 30);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(10, -6, 28, 12);
         ctx.restore();
 
-        // Vẽ Boss (Đỏ neon)
-        ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
-        ctx.shadowBlur = 15; ctx.shadowColor = '#f05';
-        ctx.fillStyle = '#f05'; ctx.fillRect(-22, -22, 44, 44);
-        ctx.fillStyle = '#fff'; ctx.fillRect(5, -6, 30, 12);
-        ctx.restore(); ctx.shadowBlur = 0;
+        // Boss Tank
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+        ctx.rotate(boss.angle);
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#f05';
+        ctx.fillStyle = '#800';
+        ctx.fillRect(-28, -28, 56, 56);
+        ctx.fillStyle = '#f05';
+        ctx.fillRect(-20, -20, 40, 40);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(10, -9, 35, 18);
+        ctx.restore();
+        ctx.shadowBlur = 0;
 
-        // Đạn và hiệu ứng
-        bullets.forEach(b => {
-            ctx.fillStyle = b.o==='p'?'#0f0':'#f05';
-            ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, 7); ctx.fill();
-        });
-        particles.forEach(p => {
-            ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, 3, 3);
-        }); ctx.globalAlpha = 1;
-
-        update(); requestAnimationFrame(draw);
+        updateGame();
+        requestAnimationFrame(render);
     }
-    boss.lastFire = 0;
-    draw();
+
+    // --- START ENGINE ---
+    render();
 </script>
 </body>
 </html>
