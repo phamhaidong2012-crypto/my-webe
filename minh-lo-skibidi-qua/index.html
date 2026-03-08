@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Maze v22.1 - No Lag Edition</title>
+    <title>Tank Maze v22.2 - Hardcore Evasion</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; }
-        .hp-bar { color: #ff0055; font-size: 24px; font-weight: 900; }
+        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; font-weight: bold; }
+        .hp { color: #f05; font-size: 24px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="font-size: 10px; color: #555;">STABLE VERSION v22.1</div>
-    <div>TANK HP: <span id="p-hp" style="color:#0f0">3</span> | BOSS HP: <span id="b-hp" class="hp-bar">5</span></div>
+    <div>CORE: CORTEX-V22.2 | 1000% EVASION ACTIVE</div>
+    <div>TANK: <span id="p-hp" style="color:#0f0">3</span> | BOSS: <span id="b-hp" class="hp">5</span></div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -27,7 +27,7 @@
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-    const GRID_SIZE = 100, BULLET_SPEED = 7, BOSS_SPEED = 3.5;
+    const GRID_SIZE = 100, BULLET_SPEED = 7.5;
     const COLS = Math.floor(canvas.width / GRID_SIZE), ROWS = Math.floor(canvas.height / GRID_SIZE);
     
     // --- MÊ CUNG ---
@@ -36,7 +36,7 @@
         constructor(c, r) { this.c = c; this.r = r; this.walls = [true, true, true, true]; this.visited = false; }
         draw() {
             let x = this.c * GRID_SIZE, y = this.r * GRID_SIZE;
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 4; ctx.beginPath();
+            ctx.strokeStyle = '#252525'; ctx.lineWidth = 5; ctx.beginPath();
             if (this.walls[0]) { ctx.moveTo(x, y); ctx.lineTo(x + GRID_SIZE, y); }
             if (this.walls[1]) { ctx.moveTo(x + GRID_SIZE, y); ctx.lineTo(x + GRID_SIZE, y + GRID_SIZE); }
             if (this.walls[2]) { ctx.moveTo(x + GRID_SIZE, y + GRID_SIZE); ctx.lineTo(x, y + GRID_SIZE); }
@@ -73,45 +73,37 @@
     window.onmouseup = () => { mouse.down = false; };
 
     function fire(obj, color, owner) {
-        let vx = Math.cos(obj.angle) * BULLET_SPEED, vy = Math.sin(obj.angle) * BULLET_SPEED;
-        let b = { x: obj.x, y: obj.y, vx, vy, color, owner, spawnTime: Date.now() };
-        if(owner === 'player') calculateFuture(b);
+        let b = { 
+            x: obj.x, y: obj.y, 
+            vx: Math.cos(obj.angle) * BULLET_SPEED, 
+            vy: Math.sin(obj.angle) * BULLET_SPEED, 
+            color, owner, spawnTime: Date.now() 
+        };
         bullets.push(b);
-    }
-
-    function calculateFuture(b) {
-        let tx = b.x, ty = b.y, tvx = b.vx, tvy = b.vy;
-        b.futurePoints = [{x: tx, y: ty}];
-        for(let i=0; i<4; i++) { // Giảm xuống 4 lần nảy để tránh treo máy
-            for(let step=0; step<30; step++) {
-                tx += tvx; ty += tvy;
-                let col = checkWall(tx, ty, tvx, tvy);
-                if(col.hit) { if(col.axis === 'x') tvx*=-1; else tvy*=-1; break; }
-            }
-            b.futurePoints.push({x: tx, y: ty});
-        }
     }
 
     function checkWall(x, y, vx, vy) {
         let cx = Math.floor(x/GRID_SIZE), cy = Math.floor(y/GRID_SIZE);
         if(!maze[cy] || !maze[cy][cx]) return { hit: true };
-        let b = 15;
-        if(vx > 0 && maze[cy][cx].walls[1] && x > (cx+1)*GRID_SIZE - b) return { hit: true, axis: 'x' };
-        if(vx < 0 && maze[cy][cx].walls[3] && x < cx*GRID_SIZE + b) return { hit: true, axis: 'x' };
-        if(vy > 0 && maze[cy][cx].walls[2] && y > (cy+1)*GRID_SIZE - b) return { hit: true, axis: 'y' };
-        if(vy < 0 && maze[cy][cx].walls[0] && y < cy*GRID_SIZE + b) return { hit: true, axis: 'y' };
+        let buffer = 18;
+        if(vx > 0 && maze[cy][cx].walls[1] && x > (cx+1)*GRID_SIZE - buffer) return { hit: true, axis: 'x' };
+        if(vx < 0 && maze[cy][cx].walls[3] && x < cx*GRID_SIZE + buffer) return { hit: true, axis: 'x' };
+        if(vy > 0 && maze[cy][cx].walls[2] && y > (cy+1)*GRID_SIZE - buffer) return { hit: true, axis: 'y' };
+        if(vy < 0 && maze[cy][cx].walls[0] && y < cy*GRID_SIZE + buffer) return { hit: true, axis: 'y' };
         return { hit: false };
     }
 
-    function getRiskAt(tx, ty) {
-        if(checkWall(tx, ty, 0, 0).hit) return 999999;
+    function getRisk(tx, ty) {
+        if(checkWall(tx, ty, 0, 0).hit) return 10000;
         let risk = 0;
         bullets.forEach(b => {
-            if(b.owner === 'player' && b.futurePoints) {
-                for(let i=0; i<b.futurePoints.length-1; i++) {
-                    let p1 = b.futurePoints[i], p2 = b.futurePoints[i+1];
-                    let d = Math.abs((p2.x-p1.x)*(p1.y-ty) - (p1.x-tx)*(p2.y-p1.y)) / Math.hypot(p2.x-p1.x, p2.y-p1.y);
-                    if(d < 50) risk += (50-d) * 100;
+            if(b.owner === 'player') {
+                // Kiểm tra xem đạn có đang hướng về phía tọa độ này không
+                let dx = tx - b.x, dy = ty - b.y;
+                let dot = (dx * b.vx + dy * b.vy) / BULLET_SPEED;
+                if (dot > 0) { // Đạn đang bay tới
+                    let dist = Math.abs(dx * b.vy - dy * b.vx) / BULLET_SPEED;
+                    if (dist < 60) risk += (60 - dist) * 10;
                 }
             }
         });
@@ -123,53 +115,76 @@
     function update() {
         if (player.hp <= 0 || boss.hp <= 0) return;
 
-        // Player Move
-        let dx = mouse.x - player.x, dy = mouse.y - player.y;
-        player.angle = Math.atan2(dy, dx);
-        if(mouse.down && Math.hypot(dx, dy) > 10) {
-            let sx = Math.cos(player.angle) * 4, sy = Math.sin(player.angle) * 4;
+        // Player di chuyển theo chuột
+        let pdx = mouse.x - player.x, pdy = mouse.y - player.y;
+        player.angle = Math.atan2(pdy, pdx);
+        if(mouse.down && Math.hypot(pdx, pdy) > 10) {
+            let sx = Math.cos(player.angle) * 4.5, sy = Math.sin(player.angle) * 4.5;
             if(!checkWall(player.x + sx, player.y, sx, 0).hit) player.x += sx;
             if(!checkWall(player.x, player.y + sy, 0, sy).hit) player.y += sy;
         }
 
-        // Boss AI (Evasion + Hunting)
-        let minRisk = getRiskAt(boss.x, boss.y), bx = boss.x, by = boss.y;
-        for(let a=0; a<Math.PI*2; a+=Math.PI/4) {
-            let tx = boss.x + Math.cos(a)*35, ty = boss.y + Math.sin(a)*35;
-            let risk = getRiskAt(tx, ty) + Math.hypot(tx-player.x, ty-player.y)*0.1;
-            if(risk < minRisk) { minRisk = risk; bx = tx; by = ty; }
+        // BOSS 1000% EVASION LOGIC
+        let bestX = boss.x, bestY = boss.y, minRisk = getRisk(boss.x, boss.y);
+        
+        // Quét các vị trí xung quanh Boss để tìm điểm an toàn nhất
+        const scanSteps = 12;
+        for(let i=0; i<scanSteps; i++) {
+            let ang = (i / scanSteps) * Math.PI * 2;
+            let tx = boss.x + Math.cos(ang) * 40;
+            let ty = boss.y + Math.sin(ang) * 40;
+            
+            // Risk = Nguy cơ đạn + Khoảng cách đến người chơi (để Boss vẫn áp sát)
+            let risk = getRisk(tx, ty) + Math.hypot(tx - player.x, ty - player.y) * 0.15;
+            
+            if(risk < minRisk) {
+                minRisk = risk; bestX = tx; bestY = ty;
+            }
         }
-        boss.x += (bx - boss.x) * 0.1; boss.y += (by - boss.y) * 0.1;
+        
+        // Cập nhật vị trí Boss mượt mà
+        boss.x += (bestX - boss.x) * 0.15;
+        boss.y += (bestY - boss.y) * 0.15;
         boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
 
         if(Date.now() - lastBossFire > 1200) { fire(boss, '#f05', 'boss'); lastBossFire = Date.now(); }
 
+        // Đạn (Sub-stepping chống xuyên tường)
         bullets.forEach((b, i) => {
-            b.x += b.vx; b.y += b.vy;
-            let col = checkWall(b.x, b.y, b.vx, b.vy);
-            if(col.hit) { if(col.axis === 'x') b.vx*=-1; else b.vy*=-1; }
+            for(let s=0; s<3; s++) {
+                b.x += b.vx/3; b.y += b.vy/3;
+                let col = checkWall(b.x, b.y, b.vx, b.vy);
+                if(col.hit) { if(col.axis === 'x') b.vx*=-1; else b.vy*=-1; break; }
+            }
             if(Date.now() - b.spawnTime > 4000) bullets.splice(i, 1);
-            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 20 && b.owner==='player') { boss.hp--; bHPText.innerText=boss.hp; bullets.splice(i, 1); }
-            if(Math.hypot(b.x-player.x, b.y-player.y) < 20 && b.owner==='boss') { player.hp--; pHPText.innerText=player.hp; bullets.splice(i, 1); }
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 22 && b.owner==='player') {
+                boss.hp--; bHPText.innerText=boss.hp; bullets.splice(i, 1);
+                if(boss.hp <= 0) alert("VICTORY!");
+            }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 22 && b.owner==='boss') {
+                player.hp--; pHPText.innerText=player.hp; bullets.splice(i, 1);
+                if(player.hp <= 0) alert("GAME OVER");
+            }
         });
     }
 
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         maze.forEach(r => r.forEach(c => c.draw()));
 
-        // Player
+        // Vẽ Player
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
         ctx.fillStyle = '#0f0'; ctx.fillRect(-20, -18, 40, 36);
         ctx.restore();
 
-        // Boss
+        // Vẽ Boss
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
-        ctx.fillStyle = '#f05'; ctx.fillRect(-22, -22, 44, 44);
-        ctx.restore();
+        ctx.fillStyle = '#f05'; ctx.shadowBlur = 10; ctx.shadowColor = '#f05';
+        ctx.fillRect(-25, -25, 50, 50);
+        ctx.restore(); ctx.shadowBlur = 0;
 
         bullets.forEach(b => {
-            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI*2); ctx.fill();
         });
 
         update(); requestAnimationFrame(draw);
