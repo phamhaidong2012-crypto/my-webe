@@ -9,8 +9,8 @@ body{margin:0;overflow:hidden;background:#000;font-family:'Segoe UI',sans-serif}
 canvas{display:block}
 #ui{position:fixed;top:15px;left:15px;color:#0f0;background:rgba(0,0,0,.8);padding:12px;border-radius:8px;border:1px solid #0f0}
 </style>
-
 </head>
+
 <body>
 
 <div id="ui">
@@ -100,7 +100,6 @@ let boss={x:(COLS-1)*GRID+GRID/2,y:(ROWS-1)*GRID+GRID/2,a:0,hp:7}
 
 let bullets=[]
 let mouse={x:0,y:0,down:false}
-
 let gameOver=false
 
 function checkWall(x,y){
@@ -141,7 +140,7 @@ return path[1]||path[0]
 
 [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d=>{
 
-if(maze[curr.r]&&maze[curr.r][curr.c]&&!maze[curr.r][curr.c].walls[d[2]]){
+if(maze[curr.r]&&!maze[curr.r][curr.c].walls[d[2]]){
 
 let nc=curr.c+d[0]
 let nr=curr.r+d[1]
@@ -192,13 +191,7 @@ fire(player,'#0f0','p')
 
 
 
-
-
-
-
-/* ================================
-   EXTREME BOSS AI ADDON
-================================ */
+/* ===== BOSS AI THÔNG MINH (KHÔNG XUYÊN TƯỜNG) ===== */
 
 let lastPlayer={x:player.x,y:player.y}
 
@@ -217,7 +210,7 @@ y:player.y+vy*8
 
 }
 
-function senseEnvironment(){
+function extremeBossAI(){
 
 let dist=Math.hypot(player.x-boss.x,player.y-boss.y)
 
@@ -225,44 +218,24 @@ let nearestBullet=bullets
 .filter(b=>b.o==='p')
 .sort((a,b)=>Math.hypot(boss.x-a.x,boss.y-a.y)-Math.hypot(boss.x-b.x,boss.y-b.y))[0]
 
-return{
-distance:dist,
-bulletDanger:nearestBullet&&Math.hypot(boss.x-nearestBullet.x,boss.y-nearestBullet.y)<120,
-nearestBullet,
-lowHP:boss.hp<=2
-}
+if(nearestBullet && Math.hypot(boss.x-nearestBullet.x,boss.y-nearestBullet.y)<120){
 
-}
-
-function extremeBossAI(){
-
-let env=senseEnvironment()
-
-if(env.bulletDanger){
-
-let ang=Math.atan2(env.nearestBullet.vy,env.nearestBullet.vx)
+let ang=Math.atan2(nearestBullet.vy,nearestBullet.vx)
 
 boss.a+=(ang+Math.PI/2-boss.a)*0.4
 
-boss.x+=Math.cos(boss.a+Math.PI/2)*3
-boss.y+=Math.sin(boss.a+Math.PI/2)*3
+let nx=boss.x+Math.cos(boss.a+Math.PI/2)*3
+let ny=boss.y+Math.sin(boss.a+Math.PI/2)*3
 
-return
-
+if(!checkWall(nx,ny).hit){
+boss.x=nx
+boss.y=ny
 }
 
-if(env.lowHP){
-
-let ang=Math.atan2(boss.y-player.y,boss.x-player.x)
-
-boss.x+=Math.cos(ang)*3
-boss.y+=Math.sin(ang)*3
-
 return
-
 }
 
-if(env.distance<220){
+if(dist<220){
 
 let future=predictPlayer()
 
@@ -273,8 +246,6 @@ boss.a+=(ang-boss.a)*0.3
 if(Math.random()<0.08)
 fire(boss,'#f05','b')
 
-return
-
 }
 
 let next=findPath()
@@ -284,14 +255,15 @@ let ty=next.r*GRID+GRID/2
 
 let ang=Math.atan2(ty-boss.y,tx-boss.x)
 
-boss.x+=Math.cos(ang)*2.8
-boss.y+=Math.sin(ang)*2.8
+let nx=boss.x+Math.cos(ang)*2.5
+let ny=boss.y+Math.sin(ang)*2.5
 
+if(!checkWall(nx,ny).hit){
+boss.x=nx
+boss.y=ny
 }
 
-
-
-
+}
 
 
 
@@ -299,10 +271,7 @@ function update(){
 
 if(gameOver)return
 
-/* chạy AI mới */
 extremeBossAI()
-
-
 
 player.a=Math.atan2(mouse.y-player.y,mouse.x-player.x)
 
