@@ -3,45 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boss AI v17.7 - Tactical Tracking Laser</title>
+    <title>Tank Maze: Boss Survival</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
-        .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; margin-bottom: 5px; }
-        #player-ui { position: fixed; bottom: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
-        #shield-ui { 
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); 
-            text-align: center; color: #0cf; font-weight: 900; display: none;
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; font-weight: bold; }
+        .hp-bar { color: #f00; font-size: 20px; }
+        #death-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(136, 0, 0, 0.8); color: white; display: none;
+            justify-content: center; align-items: center; flex-direction: column;
+            font-size: 50px; font-weight: 900; z-index: 100;
         }
-        #laser-ui {
-            position: fixed; bottom: 15px; right: 15px; color: #f00; font-weight: bold; text-align: right;
-        }
-        .warning { color: #ff3333; font-size: 24px; animation: blink 0.2s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="stat">BOSS HP: <span id="hp">3</span></div>
-    <div style="font-size: 10px;">CORE: CORTEX-V29 | MULTI-FIRE: ENABLED</div>
+    <div>PLAYER HP: <span id="p-hp" class="hp-bar">3</span> | BOSS HP: <span id="b-hp" class="hp-bar">5</span></div>
+    <div style="font-size: 10px; color: #555;">W,A,S,D: Move Tank | CLICK/SPACE: Fire</div>
 </div>
 
-<div id="shield-ui">
-    <div class="warning">WARNING: 12 DAMAGE DETECTED!</div>
-    <div style="font-size: 30px;">SHIELD: <span id="shield-count">0</span>/12</div>
-    <div style="font-size: 12px;">NHẤN [N] LIÊN TỤC ĐỂ ĐỠ!</div>
-</div>
-
-<div id="player-ui">
-    <div class="stat">TOWER HP: <span id="p-hp">3</span></div>
-    <div style="font-size: 10px;">BOSS ATTACK IN: <span id="timer-txt">30</span>s</div>
-</div>
-
-<div id="laser-ui">
-    <div id="laser-status" style="font-size: 18px;">LASER: LOCKED</div>
-    <div style="font-size: 12px;">AMMO: <span id="laser-ammo">0</span> (Phím 1)</div>
+<div id="death-screen">
+    <div id="status-msg">MISSION FAILED</div>
+    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; cursor:pointer;">REBOOT SYSTEM</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -49,199 +34,182 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const hpTxt = document.getElementById('hp'), pHpTxt = document.getElementById('p-hp'), timerTxt = document.getElementById('timer-txt');
-    const shieldUi = document.getElementById('shield-ui'), shieldCountTxt = document.getElementById('shield-count');
-    const laserStatus = document.getElementById('laser-status'), laserAmmoTxt = document.getElementById('laser-ammo');
+    const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp');
+    const deathScreen = document.getElementById('death-screen'), statusMsg = document.getElementById('status-msg');
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-    const ARENA_RADIUS = 225, ARENA_X = canvas.width / 2, ARENA_Y = canvas.height / 2;
-    const BOSS_REAL_HITBOX = 5, SAFETY_BUFFER = 55;
-    const TOWER = { x: canvas.width / 2, y: canvas.height - 60, size: 50 };
-
-    let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
-    let playerHp = 3, bullets = [], bossBullets = [], mouseX = 0, mouseY = 0, gameTime = 0, lastDecisionTime = 0;
-    let shieldCount = 0, isGathering = false, gatherRadius = 0, nPressed = false;
-
-    let laserAmmo = 0, laserCharge = 0, laserTimer = 0, laserParticles = [], laserTargetAngle = 0;
-
-    setInterval(() => {
-        gameTime++;
-        let countdown = 30 - (gameTime % 30);
-        timerTxt.innerText = countdown;
-        if (countdown === 3) startGathering();
-        if (gameTime > 0 && gameTime % 30 === 0) bossShoot();
-    }, 1000);
-
-    function startGathering() {
-        isGathering = true; gatherRadius = 150; shieldCount = 0;
-        shieldCountTxt.innerText = "0"; shieldUi.style.display = "block";
-    }
-
-    function bossShoot() {
-        isGathering = false; shieldUi.style.display = "none";
-        const isBlocked = shieldCount >= 12;
-        const angle = Math.atan2(TOWER.y - boss.y, TOWER.x - boss.x);
-        bossBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(angle) * 8, vy: Math.sin(angle) * 8, blocked: isBlocked });
-    }
-
-    function createLaserParticles() {
-        for (let i = 0; i < 30; i++) {
-            let ang = Math.random() * Math.PI * 2, dist = 100 + Math.random() * 50;
-            laserParticles.push({ x: TOWER.x + Math.cos(ang) * dist, y: TOWER.y + Math.sin(ang) * dist, speed: 2 + Math.random() * 2, life: 60 });
+    const GRID_SIZE = 50, BULLET_SPEED = 6, BULLET_LIFE = 5000;
+    const COLS = Math.floor(canvas.width / GRID_SIZE), ROWS = Math.floor(canvas.height / GRID_SIZE);
+    
+    // --- MÊ CUNG ---
+    let maze = [];
+    class Cell {
+        constructor(c, r) { this.c = c; this.r = r; this.walls = [true, true, true, true]; this.visited = false; }
+        draw() {
+            let x = this.c * GRID_SIZE, y = this.r * GRID_SIZE;
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath();
+            if (this.walls[0]) { ctx.moveTo(x, y); ctx.lineTo(x + GRID_SIZE, y); }
+            if (this.walls[1]) { ctx.moveTo(x + GRID_SIZE, y); ctx.lineTo(x + GRID_SIZE, y + GRID_SIZE); }
+            if (this.walls[2]) { ctx.moveTo(x + GRID_SIZE, y + GRID_SIZE); ctx.lineTo(x, y + GRID_SIZE); }
+            if (this.walls[3]) { ctx.moveTo(x, y + GRID_SIZE); ctx.lineTo(x, y); }
+            ctx.stroke();
         }
     }
 
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space') { e.preventDefault(); fireBullet(); }
-        if (e.code === 'KeyN' && !nPressed && isGathering) { nPressed = true; shieldCount++; shieldCountTxt.innerText = shieldCount; }
-        if (e.code === 'Digit1' && laserAmmo > 0 && laserCharge <= 1) {
-            laserAmmo--; laserAmmoTxt.innerText = laserAmmo;
-            laserCharge = 2; laserTimer = 60; 
-            laserTargetAngle = Math.atan2(boss.y - TOWER.y, boss.x - TOWER.x); // Khóa hướng bắn
-            createLaserParticles();
-            if (laserAmmo === 0) { laserStatus.innerText = "LOCKED"; laserStatus.style.color = "#f00"; }
-        }
-    });
-
-    window.addEventListener('keyup', (e) => { if (e.code === 'KeyN') nPressed = false; });
-    window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
-    window.addEventListener('pointerdown', fireBullet);
-
-    function fireBullet() {
-        if (Math.hypot(mouseX - ARENA_X, mouseY - ARENA_Y) <= ARENA_RADIUS) return;
-        const angle = Math.atan2(boss.y - mouseY, boss.x - mouseX);
-        bullets.push({ x: mouseX, y: mouseY, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, charge: 30, initialCharge: 30, active: false });
-    }
-
-    function getRiskAt(tx, ty) {
-        let totalRisk = 0;
-        if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) return 1000000;
-        
-        // AI né vùng Laser (Đỏ nhạt rộng 20px hoặc Laser trắng)
-        if (laserCharge >= 2) {
-            let dx = tx - TOWER.x, dy = ty - TOWER.y;
-            let distToLaserLine = Math.abs(dx * Math.sin(-laserTargetAngle) + dy * Math.cos(-laserTargetAngle));
-            if (distToLaserLine < 45) totalRisk += 900000;
-        }
-
-        for (let b of bullets) {
-            let dx = b.vx, dy = b.vy, num = Math.abs(dx * (b.y - ty) - (b.x - tx) * dy), den = Math.sqrt(dx * dx + dy * dy);
-            if (num / den < SAFETY_BUFFER && (tx - b.x) * dx + (ty - b.y) * dy > -10) totalRisk += (SAFETY_BUFFER - (num / den)) * 200;
-        }
-        return totalRisk;
-    }
-
-    function solveAI() {
-        const now = Date.now(); if (getRiskAt(boss.targetX, boss.targetY) < 500 && now - lastDecisionTime < 150) return;
-        let bestScore = getRiskAt(boss.x, boss.y), bestP = { x: boss.x, y: boss.y };
-        for (let i = 0; i < 48; i++) {
-            let ang = (i / 48) * Math.PI * 2, tx = boss.x + Math.cos(ang) * 95, ty = boss.y + Math.sin(ang) * 95;
-            let score = getRiskAt(tx, ty) + Math.hypot(tx - ARENA_X, ty - ARENA_Y) * 1.5;
-            if (score < bestScore) { bestScore = score; bestP = { x: tx, y: ty }; }
-        }
-        boss.targetX = bestP.x; boss.targetY = bestP.y; lastDecisionTime = now;
-    }
-
-    function update() {
-        solveAI();
-        let dx = boss.targetX - boss.x, dy = boss.targetY - boss.y, d = Math.hypot(dx, dy);
-        if (d > 2) {
-            let targetAngle = Math.atan2(dy, dx), diff = targetAngle - boss.angle;
-            while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
-            boss.angle += diff * 0.15; boss.x += Math.cos(boss.angle) * 8.8; boss.y += Math.sin(boss.angle) * 8.8;
-        }
-
-        if (laserCharge === 2) {
-            laserTimer--;
-            laserParticles.forEach((p, i) => {
-                let pDx = TOWER.x - p.x, pDy = TOWER.y - p.y, dist = Math.hypot(pDx, pDy);
-                p.x += (pDx / dist) * p.speed; p.y += (pDy / dist) * p.speed; p.life--;
-                if (dist < 5 || p.life <= 0) laserParticles.splice(i, 1);
+    function initMaze() {
+        for (let r = 0; r < ROWS; r++) { maze[r] = []; for (let c = 0; c < COLS; c++) maze[r][c] = new Cell(c, r); }
+        let current = maze[0][0], stack = []; current.visited = true;
+        do {
+            let neighbors = [], c = current.c, r = current.r;
+            [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d => {
+                let nc = c+d[0], nr = r+d[1], n = maze[nr] && maze[nr][nc];
+                if (n && !n.visited) neighbors.push({cell: n, w1: d[2], w2: d[3]});
             });
-            if (laserTimer <= 0) { laserCharge = 3; laserTimer = 180; laserParticles = []; } 
-        } else if (laserCharge === 3) {
-            laserTimer--;
-            let bDx = boss.x - TOWER.x, bDy = boss.y - TOWER.y;
-            let distToLaserLine = Math.abs(bDx * Math.sin(-laserTargetAngle) + bDy * Math.cos(-laserTargetAngle));
-            if (distToLaserLine < 20 && laserTimer % 20 === 0) {
-                boss.hp--; hpTxt.innerText = boss.hp;
-                if (boss.hp <= 0) { alert("LASER TIÊU DIỆT BOSS!"); location.reload(); }
+            if (neighbors.length > 0) {
+                let next = neighbors[Math.floor(Math.random()*neighbors.length)];
+                next.cell.visited = true; stack.push(current);
+                current.walls[next.w1] = false; next.cell.walls[next.w2] = false; current = next.cell;
+            } else if (stack.length > 0) current = stack.pop();
+        } while (stack.length > 0);
+    }
+    initMaze();
+
+    // --- ĐỐI TƯỢNG ---
+    let player = { x: 75, y: 75, angle: 0, hp: 3, speed: 0, rotSpeed: 0 };
+    let boss = { x: canvas.width-75, y: canvas.height-75, angle: 0, hp: 5, targetX: 0, targetY: 0 };
+    let bullets = []; // {x, y, vx, vy, owner, spawnTime, futurePoints}
+    let keys = {};
+
+    window.onkeydown = (e) => keys[e.code] = true;
+    window.onkeyup = (e) => keys[e.code] = false;
+    window.onmousedown = () => fire(player, '#0f0', 'player');
+    window.addEventListener('keydown', (e) => { if(e.code === 'Space') fire(player, '#0f0', 'player'); });
+
+    function fire(obj, color, owner) {
+        let vx = Math.cos(obj.angle) * BULLET_SPEED, vy = Math.sin(obj.angle) * BULLET_SPEED;
+        let b = { x: obj.x, y: obj.y, vx, vy, color, owner, spawnTime: Date.now() };
+        calculateFuture(b); bullets.push(b);
+    }
+
+    function calculateFuture(b) {
+        let tx = b.x, ty = b.y, tvx = b.vx, tvy = b.vy;
+        b.futurePoints = [{x: tx, y: ty}];
+        for(let i=0; i<8; i++) { // Dự báo 8 lần nảy
+            let hit = false;
+            for(let step=0; step<30; step++) {
+                tx += tvx; ty += tvy;
+                let cx = Math.floor(tx/GRID_SIZE), cy = Math.floor(ty/GRID_SIZE);
+                if(!maze[cy] || !maze[cy][cx]) { hit=true; break; }
+                if(tvx > 0 && maze[cy][cx].walls[1] && tx > (cx+1)*GRID_SIZE-5) { tvx*=-1; hit=true; }
+                else if(tvx < 0 && maze[cy][cx].walls[3] && tx < cx*GRID_SIZE+5) { tvx*=-1; hit=true; }
+                if(tvy > 0 && maze[cy][cx].walls[2] && ty > (cy+1)*GRID_SIZE-5) { tvy*=-1; hit=true; }
+                else if(tvy < 0 && maze[cy][cx].walls[0] && ty < cy*GRID_SIZE+5) { tvy*=-1; hit=true; }
+                if(hit) break;
             }
-            if (laserTimer <= 0) laserCharge = (laserAmmo > 0) ? 1 : 0;
+            b.futurePoints.push({x: tx, y: ty});
         }
+    }
 
-        if (isGathering) gatherRadius -= 150 / (3 * 60);
+    function checkWall(x, y) {
+        let cx = Math.floor(x/GRID_SIZE), cy = Math.floor(y/GRID_SIZE);
+        if(!maze[cy] || !maze[cy][cx]) return true;
+        let buffer = 10;
+        if (maze[cy][cx].walls[0] && y < cy*GRID_SIZE + buffer) return true;
+        if (maze[cy][cx].walls[1] && x > (cx+1)*GRID_SIZE - buffer) return true;
+        if (maze[cy][cx].walls[2] && y > (cy+1)*GRID_SIZE - buffer) return true;
+        if (maze[cy][cx].walls[3] && x < cx*GRID_SIZE + buffer) return true;
+        return false;
+    }
 
-        bullets.forEach((b, i) => {
-            if (b.charge > 0) { b.charge--; if (b.charge <= 0) b.active = true; }
-            if (b.active) { b.x += b.vx; b.y += b.vy; }
-            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
-                boss.hp--; hpTxt.innerText = boss.hp; bullets.splice(i, 1);
-                if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
-            } else if (b.x < -1000 || b.x > canvas.width+1000) bullets.splice(i, 1);
-        });
+    let lastBossFire = 0;
+    function update() {
+        if (player.hp <= 0 || boss.hp <= 0) return;
 
-        bossBullets.forEach((b, i) => {
-            b.x += b.vx; b.y += b.vy;
-            if (Math.hypot(b.x - TOWER.x, b.y - TOWER.y) < TOWER.size / 2) {
-                if (!b.blocked) {
-                    playerHp--; pHpTxt.innerText = playerHp;
-                    if (playerHp === 2) laserAmmo = 1; if (playerHp === 1) laserAmmo = 2;
-                    laserAmmoTxt.innerText = laserAmmo;
-                    if (laserAmmo > 0) { laserCharge = 1; laserStatus.innerText = "READY"; laserStatus.style.color = "#0f0"; }
+        // Player Tank Logic
+        if (keys['KeyA']) player.angle -= 0.05;
+        if (keys['KeyD']) player.angle += 0.05;
+        let speed = 0;
+        if (keys['KeyW']) speed = 3;
+        if (keys['KeyS']) speed = -2;
+        let nx = player.x + Math.cos(player.angle) * speed;
+        let ny = player.y + Math.sin(player.angle) * speed;
+        if (!checkWall(nx, ny)) { player.x = nx; player.y = ny; }
+
+        // Boss AI Logic (Cortex-V32)
+        let bossRisk = (tx, ty) => {
+            let risk = 0;
+            bullets.forEach(b => {
+                if(b.owner === 'player' && b.futurePoints) {
+                    for(let i=0; i<b.futurePoints.length-1; i++) {
+                        let p1 = b.futurePoints[i], p2 = b.futurePoints[i+1];
+                        let d = Math.abs((p2.x-p1.x)*(p1.y-ty) - (p1.x-tx)*(p2.y-p1.y)) / Math.hypot(p2.x-p1.x, p2.y-p1.y);
+                        if(d < 30) risk += 1000;
+                    }
                 }
-                bossBullets.splice(i, 1);
-                if (playerHp <= 0) { alert("THÁP SỤP ĐỔ!"); location.reload(); }
-            } else if (b.y > canvas.height + 100) bossBullets.splice(i, 1);
+            });
+            return risk + (checkWall(tx, ty) ? 5000 : 0);
+        };
+
+        let bestDir = boss.angle, minRisk = bossRisk(boss.x, boss.y);
+        for(let a=0; a<Math.PI*2; a+=Math.PI/4) {
+            let tx = boss.x + Math.cos(a)*40, ty = boss.y + Math.sin(a)*40;
+            let r = bossRisk(tx, ty);
+            if(r < minRisk) { minRisk = r; boss.targetX = tx; boss.targetY = ty; }
+        }
+        boss.x += (boss.targetX - boss.x) * 0.05; boss.y += (boss.targetY - boss.y) * 0.05;
+        boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+
+        if(Date.now() - lastBossFire > 1500) { fire(boss, '#f00', 'boss'); lastBossFire = Date.now(); }
+
+        // Bullet Logic
+        bullets.forEach((b, i) => {
+            let oldX = b.x, oldY = b.y;
+            b.x += b.vx; b.y += b.vy;
+            let cx = Math.floor(b.x/GRID_SIZE), cy = Math.floor(b.y/GRID_SIZE);
+            if(maze[cy] && maze[cy][cx]) {
+                if((b.vx>0 && maze[cy][cx].walls[1] && b.x>(cx+1)*GRID_SIZE-5) || (b.vx<0 && maze[cy][cx].walls[3] && b.x<cx*GRID_SIZE+5)) b.vx*=-1;
+                if((b.vy>0 && maze[cy][cx].walls[2] && b.y>(cy+1)*GRID_SIZE-5) || (b.vy<0 && maze[cy][cx].walls[0] && b.y<cy*GRID_SIZE+5)) b.vy*=-1;
+            }
+            if(Date.now() - b.spawnTime > BULLET_LIFE) bullets.splice(i, 1);
+
+            // Hit Detection
+            if(Math.hypot(b.x - boss.x, b.y - boss.y) < 15 && b.owner === 'player') {
+                boss.hp--; bHPText.innerText = boss.hp; bullets.splice(i, 1);
+                if(boss.hp <= 0) { statusMsg.innerText = "BOSS DESTROYED"; deathScreen.style.display="flex"; }
+            }
+            if(Math.hypot(b.x - player.x, b.y - player.y) < 15 && b.owner === 'boss') {
+                player.hp--; pHPText.innerText = player.hp; bullets.splice(i, 1);
+                if(player.hp <= 0) { statusMsg.innerText = "TANK ELIMINATED"; deathScreen.style.display="flex"; }
+            }
         });
     }
 
     function draw() {
         ctx.fillStyle = '#020202'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.beginPath(); ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI*2);
-        ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.stroke();
+        maze.forEach(row => row.forEach(cell => cell.draw()));
 
-        // VẼ LASER & TELEGRAPH
-        if (laserCharge === 2) {
-            // Đường dự báo đỏ nhạt rộng 20px
-            ctx.save(); ctx.translate(TOWER.x, TOWER.y); ctx.rotate(laserTargetAngle);
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; 
-            ctx.fillRect(0, -10, 2000, 20); 
-            ctx.restore();
+        // Vẽ Tank người chơi
+        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
+        ctx.fillStyle = '#0f0'; ctx.fillRect(-15, -12, 30, 24); ctx.fillStyle = '#0a0'; ctx.fillRect(0, -3, 20, 6);
+        ctx.restore();
 
-            ctx.beginPath(); ctx.arc(TOWER.x, TOWER.y, Math.max(0, laserTimer * 2.5), 0, Math.PI*2);
-            ctx.strokeStyle = '#f00'; ctx.lineWidth = 3; ctx.stroke();
-            ctx.fillStyle = '#f00'; laserParticles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill(); });
-        } else if (laserCharge === 3) {
-            ctx.save(); ctx.translate(TOWER.x, TOWER.y); ctx.rotate(laserTargetAngle);
-            ctx.shadowBlur = 25; ctx.shadowColor = '#f00'; ctx.fillStyle = '#fff';
-            ctx.fillRect(0, -10, 2000, 20); 
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; ctx.fillRect(0, -15, 2000, 30);
-            ctx.restore(); ctx.shadowBlur = 0;
-        }
-
-        ctx.fillStyle = '#0f0'; ctx.fillRect(TOWER.x - 25, TOWER.y - 25, 50, 50);
-        if (isGathering && shieldCount >= 12) {
-            ctx.beginPath(); ctx.arc(TOWER.x, TOWER.y, 45, 0, Math.PI*2); ctx.strokeStyle = '#0cf'; ctx.lineWidth = 5; ctx.stroke();
-        }
-        if (isGathering) {
-            ctx.beginPath(); ctx.arc(boss.x, boss.y, Math.max(0, gatherRadius), 0, Math.PI*2); ctx.strokeStyle = '#f0f'; ctx.lineWidth = 2; ctx.stroke();
-        }
-
-        bullets.forEach(b => {
-            if (!b.active) { ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0, b.charge / b.initialCharge * 20 + 5), 0, Math.PI*2); ctx.strokeStyle = '#0f0'; ctx.stroke(); }
-            ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200); ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)'; ctx.stroke();
-            ctx.fillStyle = b.active ? '#0f0' : '#333'; ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
-        });
-
-        bossBullets.forEach(b => {
-            ctx.fillStyle = b.blocked ? 'rgba(0, 204, 255, 0.3)' : '#f0f'; ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI*2); ctx.fill();
-        });
-
+        // Vẽ Boss
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
-        ctx.fillStyle = '#111'; ctx.fillRect(-22, -22, 44, 10); ctx.fillRect(-22, 12, 44, 10);
-        ctx.fillStyle = (boss.hp === 1) ? '#f0f' : '#f33'; ctx.fillRect(-18, -15, 36, 30); ctx.restore();
+        ctx.fillStyle = '#f33'; ctx.fillRect(-15, -15, 30, 30); ctx.fillStyle = '#900'; ctx.fillRect(5, -4, 15, 8);
+        ctx.restore();
+
+        // Vẽ Đạn và Dự báo
+        bullets.forEach(b => {
+            if(b.futurePoints) {
+                ctx.beginPath(); ctx.moveTo(b.x, b.y);
+                b.futurePoints.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.strokeStyle = b.owner === 'player' ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.2)';
+                ctx.lineWidth = (b.owner === 'boss') ? 20 : 2; // Đường dự báo của boss rộng 20px
+                ctx.stroke();
+            }
+            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+        });
 
         update(); requestAnimationFrame(draw);
     }
