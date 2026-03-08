@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Maze v27.5 - God AI Ricochet</title>
+    <title>Tank Maze v28.0 - Physical Fixed</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: monospace; }
         canvas { display: block; }
@@ -14,9 +14,9 @@
 <body>
 
 <div id="ui">
-    <div>[ SYSTEM: GOD_AI_v27.5_RICOCHET ]</div>
+    <div>[ SYSTEM: GOD_AI_v28_FIXED ]</div>
     <div>TANK HP: <span id="p-hp" style="color:#0f0">IMMORTAL</span> | BOSS HP: <span id="b-hp" style="color:#f05">10</span></div>
-    <div id="ai-action" style="color: #ff0; font-size: 12px;">AI: CALCULATING TRAJECTORIES...</div>
+    <div id="ai-action" style="color: #ff0; font-size: 12px;">AI: MONITORING...</div>
 </div>
 <div id="msg"></div>
 
@@ -28,7 +28,8 @@
     const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), aiAct = document.getElementById('ai-action');
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-    const GRID = 80, B_SPEED = 7, P_SPEED = 4.5;
+    const GRID = 80, B_SPEED = 3.5; // Giảm tốc độ Boss một chút để mượt hơn
+    const P_SPEED = 4.5;
     const COLS = Math.floor(canvas.width / GRID), ROWS = Math.floor(canvas.height / GRID);
     
     let maze = [];
@@ -59,18 +60,20 @@
     let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 10 };
     let bullets = [], gameOver = false, mouse = { x: 0, y: 0, down: false };
 
+    // FIX LỖI XUYÊN TƯỜNG: Kiểm tra va chạm đa điểm
     function checkWall(x, y, vx, vy) {
         let cx = Math.floor(x/GRID), cy = Math.floor(y/GRID);
         if(!maze[cy] || !maze[cy][cx]) return { hit: true };
-        let b = 15, rx = x % GRID, ry = y % GRID;
-        if(vx < 0 && maze[cy][cx].walls[3] && rx < b) return { hit: true, axis: 'x' };
-        if(vx > 0 && maze[cy][cx].walls[1] && rx > GRID-b) return { hit: true, axis: 'x' };
-        if(vy < 0 && maze[cy][cx].walls[0] && ry < b) return { hit: true, axis: 'y' };
-        if(vy > 0 && maze[cy][cx].walls[2] && ry > GRID-b) return { hit: true, axis: 'y' };
+        let b = 20; // Tăng biên độ va chạm lên 20 để chống xuyên
+        let rx = x % GRID, ry = y % GRID;
+        
+        if(maze[cy][cx].walls[0] && ry < b) return { hit: true, axis: 'y' };
+        if(maze[cy][cx].walls[1] && rx > GRID-b) return { hit: true, axis: 'x' };
+        if(maze[cy][cx].walls[2] && ry > GRID-b) return { hit: true, axis: 'y' };
+        if(maze[cy][cx].walls[3] && rx < b) return { hit: true, axis: 'x' };
         return { hit: false };
     }
 
-    // Hàm mô phỏng quỹ đạo đạn (dùng cho cả vẽ và AI)
     function getTrajectory(x, y, vx, vy, steps = 150) {
         let points = [{x, y}], tx = x, ty = y, tvx = vx, tvy = vy;
         for(let i = 0; i < steps; i++) {
@@ -96,14 +99,14 @@
     }
 
     function getRisk(tx, ty) {
-        if(checkWall(tx, ty, 0, 0).hit) return 1000000; // Tường là nguy hiểm nhất
+        if(checkWall(tx, ty, 0, 0).hit) return 5000000; 
         let risk = 0;
         bullets.forEach(b => {
             if(b.o === 'p') {
-                let traj = getTrajectory(b.x, b.y, b.vx, b.vy, 80);
+                let traj = getTrajectory(b.x, b.y, b.vx, b.vy, 60);
                 for(let i=0; i<traj.length-1; i++) {
                     let d = distToSegment({x:tx, y:ty}, traj[i], traj[i+1]);
-                    if(d < 50) risk += (50 - d) * 150;
+                    if(d < 40) risk += (40 - d) * 100;
                 }
             }
         });
@@ -135,57 +138,61 @@
 
     window.onmousemove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
     window.onmousedown = () => { if(!gameOver) fire(player, '#0f0', 'p'); };
-    window.onkeydown = (e) => { if(e.code === 'Space' && !gameOver) fire(player, '#0f0', 'p'); };
 
     let lastShot = 0;
-
     function update() {
         if(gameOver) return;
         
-        // PLAYER MOVE
+        // PLAYER
         player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-        let distMouse = Math.hypot(mouse.x-player.x, mouse.y-player.y);
-        if(distMouse > 20) {
-            let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
-            if(!checkWall(nx, player.y, Math.cos(player.a), 0).hit) player.x = nx;
-            if(!checkWall(player.x, ny, 0, Math.sin(player.a)).hit) player.y = ny;
-        }
+        let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
+        if(!checkWall(nx, player.y).hit) player.x = nx;
+        if(!checkWall(player.x, ny).hit) player.y = ny;
 
-        // BOSS GOD AI LOGIC
+        // BOSS MOVEMENT
         let pathNext = findPath();
         let targetX = pathNext.c * GRID + GRID/2, targetY = pathNext.r * GRID + GRID/2;
         let bestX = boss.x, bestY = boss.y, minRisk = Infinity;
 
-        // Né tường + Né đạn (16 hướng radar)
         for(let i=0; i<16; i++){
             let ang = i * Math.PI/8;
-            let tx = boss.x + Math.cos(ang)*40, ty = boss.y + Math.sin(ang)*40;
-            let r = getRisk(tx, ty) + Math.hypot(tx-targetX, ty-targetY) * 2;
+            let tx = boss.x + Math.cos(ang)*35, ty = boss.y + Math.sin(ang)*35;
+            let r = getRisk(tx, ty) + Math.hypot(tx-targetX, ty-targetY) * 3;
             if(r < minRisk) { minRisk = r; bestX = tx; bestY = ty; }
         }
-        boss.x += (bestX - boss.x) * 0.12; boss.y += (bestY - boss.y) * 0.12;
+        // Di chuyển mượt không bị khựng
+        boss.x += (bestX - boss.x) * 0.1; 
+        boss.y += (bestY - boss.y) * 0.1;
 
-        // BOSS RICOCHET SHOOTING (Bắn nảy 2-3 lần)
-        if(Date.now() - lastShot > 800) {
+        // BOSS ROTATION & RICOCHET AI
+        if(Date.now() - lastShot > 1000) {
             let found = false;
-            for(let a=0; a<Math.PI*2; a+=0.15) {
-                let traj = getTrajectory(boss.x, boss.y, Math.cos(a)*8, Math.sin(a)*8, 400);
+            for(let a=0; a<Math.PI*2; a+=0.2) {
+                let traj = getTrajectory(boss.x, boss.y, Math.cos(a)*8, Math.sin(a)*8, 300);
                 for(let i=0; i<traj.length-1; i++) {
-                    if(distToSegment(player, traj[i], traj[i+1]) < 25) {
-                        boss.a = a; fire(boss, '#f05', 'b');
-                        lastShot = Date.now(); found = true;
-                        aiAct.innerText = "AI: RICOCHET LOCKED!"; break;
+                    if(distToSegment(player, traj[i], traj[i+1]) < 30) {
+                        // FIX LỖI XOAY NHANH: Nội suy góc xoay (Interpolation)
+                        let diff = a - boss.a;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        boss.a += diff * 0.2; 
+                        
+                        if(Math.abs(diff) < 0.3) { fire(boss, '#f05', 'b'); lastShot = Date.now(); }
+                        found = true; break;
                     }
                 }
                 if(found) break;
             }
             if(!found) {
-                boss.a = Math.atan2(player.y - boss.y, player.x - boss.x);
-                aiAct.innerText = "AI: ANALYZING RICOCHET ANGLES...";
+                let targetA = Math.atan2(player.y - boss.y, player.x - boss.x);
+                let diff = targetA - boss.a;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                boss.a += diff * 0.05;
             }
         }
 
-        // BULLET UPDATE
+        // BULLETS
         bullets.forEach((b, i) => {
             b.x += b.vx; b.y += b.vy;
             let impact = checkWall(b.x, b.y, b.vx, b.vy);
@@ -194,15 +201,8 @@
                 else if(impact.axis === 'y') b.vy *= -1;
                 else bullets.splice(i, 1);
             }
-            // Damage Boss
-            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 22 && b.o==='p') { 
-                boss.hp--; bullets.splice(i, 1); 
-                if(boss.hp<=0) endGame("WIN!"); 
-            }
-            // Damage Player (IMMORTAL)
-            if(Math.hypot(b.x-player.x, b.y-player.y) < 22 && b.o==='b') { 
-                bullets.splice(i, 1); // No HP reduction
-            }
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 22 && b.o==='p') { boss.hp--; bullets.splice(i, 1); if(boss.hp<=0) endGame("WIN!"); }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 22 && b.o==='b') { bullets.splice(i, 1); } // Immortal
             if(Date.now() - b.t > 8000) bullets.splice(i, 1);
         });
         bHPText.innerText = boss.hp;
@@ -212,8 +212,6 @@
 
     function draw() {
         ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        
-        // Draw Maze
         ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
         maze.forEach(r => r.forEach(c => {
             let x = c.c*GRID, y = c.r*GRID;
@@ -223,22 +221,18 @@
             if(c.walls[3]) { ctx.beginPath(); ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); ctx.stroke(); }
         }));
 
-        // Draw Player
+        // Player
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
         ctx.fillStyle = '#0f0'; ctx.fillRect(-18, -18, 36, 36); ctx.fillStyle = '#fff'; ctx.fillRect(10, -5, 25, 10);
         ctx.restore();
 
-        // Draw Boss
+        // Boss
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
         ctx.fillStyle = '#f05'; ctx.shadowBlur = 15; ctx.shadowColor = '#f05';
         ctx.fillRect(-22, -22, 44, 44); ctx.fillStyle = '#fff'; ctx.fillRect(12, -6, 30, 12);
         ctx.restore(); ctx.shadowBlur = 0;
 
-        // Draw Bullets & AI Prediction Trails
         bullets.forEach(b => {
-            let traj = getTrajectory(b.x, b.y, b.vx, b.vy, 100);
-            ctx.beginPath(); ctx.strokeStyle = b.o==='p'?'rgba(0,255,0,0.15)':'rgba(255,0,85,0.15)';
-            traj.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
             ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, 7); ctx.fill();
         });
 
