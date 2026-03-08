@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Maze v22.2 - Hardcore Evasion</title>
+    <title>Tank Maze v24.0 - Full Arsenal</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: 'Courier New', monospace; }
         canvas { display: block; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; font-weight: bold; }
-        .hp { color: #f05; font-size: 24px; }
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; text-shadow: 2px 2px #000; }
+        .boss-hp { color: #ff0055; font-size: 22px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div>CORE: CORTEX-V22.2 | 1000% EVASION ACTIVE</div>
-    <div>TANK: <span id="p-hp" style="color:#0f0">3</span> | BOSS: <span id="b-hp" class="hp">5</span></div>
+    <div>[ SYSTEM: ARMORY_LOADED ]</div>
+    <div>TANK HP: <span id="p-hp" style="color:#0f0">3</span> | BOSS HP: <span id="b-hp" class="boss-hp">5</span></div>
+    <div style="font-size: 12px; color: #aaa; margin-top:5px;">PHÍM [SPACE] HOẶC CHUỘT TRÁI ĐỂ KHAI HỎA</div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -27,165 +28,148 @@
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-    const GRID_SIZE = 100, BULLET_SPEED = 7.5;
-    const COLS = Math.floor(canvas.width / GRID_SIZE), ROWS = Math.floor(canvas.height / GRID_SIZE);
+    const GRID = 100, B_SPEED = 8, P_MOVE_SPEED = 4.5;
+    const COLS = Math.floor(canvas.width / GRID), ROWS = Math.floor(canvas.height / GRID);
     
     // --- MÊ CUNG ---
     let maze = [];
-    class Cell {
-        constructor(c, r) { this.c = c; this.r = r; this.walls = [true, true, true, true]; this.visited = false; }
-        draw() {
-            let x = this.c * GRID_SIZE, y = this.r * GRID_SIZE;
-            ctx.strokeStyle = '#252525'; ctx.lineWidth = 5; ctx.beginPath();
-            if (this.walls[0]) { ctx.moveTo(x, y); ctx.lineTo(x + GRID_SIZE, y); }
-            if (this.walls[1]) { ctx.moveTo(x + GRID_SIZE, y); ctx.lineTo(x + GRID_SIZE, y + GRID_SIZE); }
-            if (this.walls[2]) { ctx.moveTo(x + GRID_SIZE, y + GRID_SIZE); ctx.lineTo(x, y + GRID_SIZE); }
-            if (this.walls[3]) { ctx.moveTo(x, y + GRID_SIZE); ctx.lineTo(x, y); }
-            ctx.stroke();
-        }
+    for (let r = 0; r < ROWS; r++) {
+        maze[r] = [];
+        for (let c = 0; c < COLS; c++) maze[r][c] = { c, r, walls: [true, true, true, true], v: false };
     }
 
-    function initMaze() {
-        for (let r = 0; r < ROWS; r++) { maze[r] = []; for (let c = 0; c < COLS; c++) maze[r][c] = new Cell(c, r); }
-        let current = maze[0][0], stack = []; current.visited = true;
-        do {
-            let neighbors = [], c = current.c, r = current.r;
+    function genMaze() {
+        let current = maze[0][0], stack = []; current.v = true;
+        while(true) {
+            let neighbors = [], {c, r} = current;
             [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d => {
-                let nc = c+d[0], nr = r+d[1], n = maze[nr] && maze[nr][nc];
-                if (n && !n.visited) neighbors.push({cell: n, w1: d[2], w2: d[3]});
+                let n = maze[r+d[1]] && maze[r+d[1]][c+d[0]];
+                if (n && !n.v) neighbors.push({cell: n, w1: d[2], w2: d[3]});
             });
             if (neighbors.length > 0) {
                 let next = neighbors[Math.floor(Math.random()*neighbors.length)];
-                next.cell.visited = true; stack.push(current);
+                next.cell.v = true; stack.push(current);
                 current.walls[next.w1] = false; next.cell.walls[next.w2] = false; current = next.cell;
             } else if (stack.length > 0) current = stack.pop();
-        } while (stack.length > 0);
+            else break;
+        }
     }
-    initMaze();
+    genMaze();
 
-    let player = { x: GRID_SIZE/2, y: GRID_SIZE/2, angle: 0, hp: 3 };
-    let boss = { x: (COLS-1)*GRID_SIZE+50, y: (ROWS-1)*GRID_SIZE+50, angle: 0, hp: 5 };
-    let bullets = [];
-    let mouse = { x: 0, y: 0, down: false };
+    let player = { x: 50, y: 50, a: 0, hp: 3 }, boss = { x: (COLS-1)*GRID+50, y: (ROWS-1)*GRID+50, a: 0, hp: 5 };
+    let bullets = [], particles = [], mouse = { x: 0, y: 0, down: false };
 
+    // --- ĐIỀU KHIỂN ---
     window.onmousemove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
-    window.onmousedown = () => { mouse.down = true; fire(player, '#0f0', 'player'); };
+    window.onmousedown = () => { mouse.down = true; fire(player, '#0f0', 'p'); };
     window.onmouseup = () => { mouse.down = false; };
+    window.onkeydown = (e) => { if(e.code === 'Space') fire(player, '#0f0', 'p'); };
 
     function fire(obj, color, owner) {
-        let b = { 
-            x: obj.x, y: obj.y, 
-            vx: Math.cos(obj.angle) * BULLET_SPEED, 
-            vy: Math.sin(obj.angle) * BULLET_SPEED, 
-            color, owner, spawnTime: Date.now() 
-        };
-        bullets.push(b);
+        bullets.push({ x: obj.x, y: obj.y, vx: Math.cos(obj.a)*B_SPEED, vy: Math.sin(obj.a)*B_SPEED, c: color, o: owner, t: Date.now() });
     }
 
-    function checkWall(x, y, vx, vy) {
-        let cx = Math.floor(x/GRID_SIZE), cy = Math.floor(y/GRID_SIZE);
-        if(!maze[cy] || !maze[cy][cx]) return { hit: true };
-        let buffer = 18;
-        if(vx > 0 && maze[cy][cx].walls[1] && x > (cx+1)*GRID_SIZE - buffer) return { hit: true, axis: 'x' };
-        if(vx < 0 && maze[cy][cx].walls[3] && x < cx*GRID_SIZE + buffer) return { hit: true, axis: 'x' };
-        if(vy > 0 && maze[cy][cx].walls[2] && y > (cy+1)*GRID_SIZE - buffer) return { hit: true, axis: 'y' };
-        if(vy < 0 && maze[cy][cx].walls[0] && y < cy*GRID_SIZE + buffer) return { hit: true, axis: 'y' };
-        return { hit: false };
+    function spawnExplosion(x, y, color) {
+        for(let i=0; i<10; i++) particles.push({ x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, c: color });
+    }
+
+    function checkWall(x, y) {
+        let cx = Math.floor(x/GRID), cy = Math.floor(y/GRID);
+        if(!maze[cy] || !maze[cy][cx]) return true;
+        let b = 18, rx = x % GRID, ry = y % GRID;
+        if(maze[cy][cx].walls[0] && ry < b) return true;
+        if(maze[cy][cx].walls[1] && rx > GRID-b) return true;
+        if(maze[cy][cx].walls[2] && ry > GRID-b) return true;
+        if(maze[cy][cx].walls[3] && rx < b) return true;
+        return false;
     }
 
     function getRisk(tx, ty) {
-        if(checkWall(tx, ty, 0, 0).hit) return 10000;
+        if(checkWall(tx, ty)) return 9999;
         let risk = 0;
         bullets.forEach(b => {
-            if(b.owner === 'player') {
-                // Kiểm tra xem đạn có đang hướng về phía tọa độ này không
+            if(b.o === 'p') {
                 let dx = tx - b.x, dy = ty - b.y;
-                let dot = (dx * b.vx + dy * b.vy) / BULLET_SPEED;
-                if (dot > 0) { // Đạn đang bay tới
-                    let dist = Math.abs(dx * b.vy - dy * b.vx) / BULLET_SPEED;
-                    if (dist < 60) risk += (60 - dist) * 10;
+                let dot = (dx*b.vx + dy*b.vy) / B_SPEED;
+                if(dot > 0 && dot < 180) {
+                    let cross = Math.abs(dx*b.vy - dy*b.vx) / B_SPEED;
+                    if(cross < 65) risk += (65 - cross) * 20;
                 }
             }
         });
         return risk;
     }
 
-    let lastBossFire = 0;
-
     function update() {
         if (player.hp <= 0 || boss.hp <= 0) return;
 
-        // Player di chuyển theo chuột
-        let pdx = mouse.x - player.x, pdy = mouse.y - player.y;
-        player.angle = Math.atan2(pdy, pdx);
-        if(mouse.down && Math.hypot(pdx, pdy) > 10) {
-            let sx = Math.cos(player.angle) * 4.5, sy = Math.sin(player.angle) * 4.5;
-            if(!checkWall(player.x + sx, player.y, sx, 0).hit) player.x += sx;
-            if(!checkWall(player.x, player.y + sy, 0, sy).hit) player.y += sy;
+        // Player di chuyển về phía chuột khi nhấn giữ
+        player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        if(mouse.down && Math.hypot(mouse.x-player.x, mouse.y-player.y) > 20) {
+            let nx = player.x + Math.cos(player.a)*P_MOVE_SPEED, ny = player.y + Math.sin(player.a)*P_MOVE_SPEED;
+            if(!checkWall(nx, player.y)) player.x = nx;
+            if(!checkWall(player.x, ny)) player.y = ny;
         }
 
-        // BOSS 1000% EVASION LOGIC
-        let bestX = boss.x, bestY = boss.y, minRisk = getRisk(boss.x, boss.y);
-        
-        // Quét các vị trí xung quanh Boss để tìm điểm an toàn nhất
-        const scanSteps = 12;
-        for(let i=0; i<scanSteps; i++) {
-            let ang = (i / scanSteps) * Math.PI * 2;
-            let tx = boss.x + Math.cos(ang) * 40;
-            let ty = boss.y + Math.sin(ang) * 40;
-            
-            // Risk = Nguy cơ đạn + Khoảng cách đến người chơi (để Boss vẫn áp sát)
-            let risk = getRisk(tx, ty) + Math.hypot(tx - player.x, ty - player.y) * 0.15;
-            
-            if(risk < minRisk) {
-                minRisk = risk; bestX = tx; bestY = ty;
-            }
+        // BOSS AI: HUNTER + EVASION
+        let bx = boss.x, by = boss.y, minR = getRisk(bx, by);
+        for(let i=0; i<12; i++) {
+            let ang = i * Math.PI / 6;
+            let tx = boss.x + Math.cos(ang)*45, ty = boss.y + Math.sin(ang)*45;
+            // Risk = Nguy cơ đạn + Khoảng cách đến người chơi (càng gần điểm risk càng thấp để ép Boss chạy tới)
+            let r = getRisk(tx, ty) + (Math.hypot(tx-player.x, ty-player.y) * 0.8);
+            if(r < minR) { minR = r; bx = tx; by = ty; }
         }
-        
-        // Cập nhật vị trí Boss mượt mà
-        boss.x += (bestX - boss.x) * 0.15;
-        boss.y += (bestY - boss.y) * 0.15;
-        boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+        boss.x += (bx - boss.x) * 0.1; boss.y += (by - boss.y) * 0.1;
+        boss.a = Math.atan2(player.y - boss.y, player.x - boss.x);
 
-        if(Date.now() - lastBossFire > 1200) { fire(boss, '#f05', 'boss'); lastBossFire = Date.now(); }
+        if(Math.random() < 0.03) fire(boss, '#f05', 'b');
 
-        // Đạn (Sub-stepping chống xuyên tường)
+        // Bullets & Particles
         bullets.forEach((b, i) => {
-            for(let s=0; s<3; s++) {
-                b.x += b.vx/3; b.y += b.vy/3;
-                let col = checkWall(b.x, b.y, b.vx, b.vy);
-                if(col.hit) { if(col.axis === 'x') b.vx*=-1; else b.vy*=-1; break; }
-            }
-            if(Date.now() - b.spawnTime > 4000) bullets.splice(i, 1);
-            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 22 && b.owner==='player') {
-                boss.hp--; bHPText.innerText=boss.hp; bullets.splice(i, 1);
-                if(boss.hp <= 0) alert("VICTORY!");
-            }
-            if(Math.hypot(b.x-player.x, b.y-player.y) < 22 && b.owner==='boss') {
-                player.hp--; pHPText.innerText=player.hp; bullets.splice(i, 1);
-                if(player.hp <= 0) alert("GAME OVER");
+            b.x += b.vx; b.y += b.vy;
+            if(checkWall(b.x, b.y)) bullets.splice(i, 1);
+            else {
+                if(Math.hypot(b.x-boss.x, b.y-boss.y) < 25 && b.o==='p') { 
+                    boss.hp--; bHPText.innerText=boss.hp; spawnExplosion(b.x, b.y, '#f05'); bullets.splice(i, 1); 
+                }
+                if(Math.hypot(b.x-player.x, b.y-player.y) < 25 && b.o==='b') { 
+                    player.hp--; pHPText.innerText=player.hp; spawnExplosion(b.x, b.y, '#0f0'); bullets.splice(i, 1); 
+                }
             }
         });
+        particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life -= 0.02; if(p.life <= 0) particles.splice(i, 1); });
+    }
+
+    function drawTank(x, y, a, color, isBoss) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+        ctx.fillStyle = color;
+        // Thân xe
+        ctx.fillRect(-18, -18, 36, 36);
+        // Nòng pháo (Đây cái nòng của ông đây!)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(10, -5, 25, 10);
+        ctx.restore();
     }
 
     function draw() {
-        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        maze.forEach(r => r.forEach(c => c.draw()));
+        ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 4;
+        maze.forEach(r => r.forEach(c => {
+            let x = c.c*GRID, y = c.r*GRID;
+            ctx.beginPath();
+            if(c.walls[0]) { ctx.moveTo(x,y); ctx.lineTo(x+GRID,y); }
+            if(c.walls[1]) { ctx.moveTo(x+GRID,y); ctx.lineTo(x+GRID,y+GRID); }
+            if(c.walls[2]) { ctx.moveTo(x+GRID,y+GRID); ctx.lineTo(x,y+GRID); }
+            if(c.walls[3]) { ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); }
+            ctx.stroke();
+        }));
 
-        // Vẽ Player
-        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-20, -18, 40, 36);
-        ctx.restore();
+        drawTank(player.x, player.y, player.a, '#0f0', false);
+        drawTank(boss.x, boss.y, boss.a, '#f05', true);
 
-        // Vẽ Boss
-        ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
-        ctx.fillStyle = '#f05'; ctx.shadowBlur = 10; ctx.shadowColor = '#f05';
-        ctx.fillRect(-25, -25, 50, 50);
-        ctx.restore(); ctx.shadowBlur = 0;
-
-        bullets.forEach(b => {
-            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI*2); ctx.fill();
-        });
+        bullets.forEach(b => { ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x,b.y,6,0,7); ctx.fill(); });
+        particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 3, 3); ctx.globalAlpha = 1; });
 
         update(); requestAnimationFrame(draw);
     }
