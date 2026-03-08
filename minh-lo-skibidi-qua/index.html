@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Tank Maze v32.0 - No-Cheat Boss</title>
+    <title>Tank Maze v31.0 - Anti-Stuck Physics</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         canvas { display: block; }
@@ -13,7 +13,7 @@
 <body>
 
 <div id="ui">
-    <div style="color: #f0f; font-size: 12px; margin-bottom: 4px;">ANTI-CHEAT BOSS v32.0</div>
+    <div style="color: #0ff; font-size: 12px; margin-bottom: 4px;">ENGINE: ANTI-STUCK & TRAJECTORY</div>
     <div>TANK HP: <span id="p-hp" style="color:#0f0">5</span> | BOSS HP: <span id="b-hp" style="color:#f05">7</span></div>
 </div>
 <div id="msg"></div>
@@ -55,7 +55,7 @@
     let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 7 };
     let bullets = [], mouse = { x: 0, y: 0, down: false }, gameOver = false;
 
-    // --- VA CHẠM TƯỜNG (KIỂM TRA CỨNG) ---
+    // --- VA CHẠM TƯỜNG ---
     function checkWall(x, y) {
         let cx = Math.floor(x/GRID), cy = Math.floor(y/GRID);
         if(!maze[cy] || !maze[cy][cx]) return { hit: true };
@@ -67,16 +67,16 @@
         return { hit: false };
     }
 
-    // --- DỰ ĐOÁN QUỸ ĐẠO (FIX KẸT) ---
+    // --- DỰ ĐOÁN QUỸ ĐẠO ĐẠN ---
     function getTrajectory(x, y, vx, vy) {
         let pts = [{x, y}], tx = x, ty = y, tvx = vx, tvy = vy;
-        for(let i=0; i<100; i++) {
+        for(let i=0; i<120; i++) { // Dự đoán 120 bước
             tx += tvx; ty += tvy;
             let w = checkWall(tx, ty);
             if(w.hit) {
                 if(w.axis === 'x') tvx *= -1; else tvy *= -1;
-                tx += tvx * 1.5; ty += tvy * 1.5; // Đẩy nhẹ đạn ra để không kẹt
                 pts.push({x: tx, y: ty});
+                tx += tvx * 1.5; ty += tvy * 1.5; // Thoát hiểm
             }
         }
         pts.push({x: tx, y: ty});
@@ -92,7 +92,7 @@
             let path = q.shift(), curr = path[path.length-1];
             if(curr.c === target.c && curr.r === target.r) return path[1] || path[0];
             [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d => {
-                if(maze[curr.r] && maze[curr.r][curr.c] && !maze[curr.r][curr.c].walls[d[2]]) {
+                if(!maze[curr.r][curr.c].walls[d[2]]) {
                     let nc = curr.c+d[0], nr = curr.r+d[1];
                     if(maze[nr] && maze[nr][nc] && !visited.has(`${nc},${nr}`)) {
                         visited.add(`${nc},${nr}`); q.push([...path, {c: nc, r: nr}]);
@@ -114,55 +114,43 @@
     function update() {
         if(gameOver) return;
         player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-        
-        // Player Move
-        let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
-        if(!checkWall(nx, player.y).hit) player.x = nx;
-        if(!checkWall(player.x, ny).hit) player.y = ny;
+        let dist = Math.hypot(mouse.x-player.x, mouse.y-player.y);
+        if(dist > 30) {
+            let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
+            if(!checkWall(nx, player.y).hit) player.x = nx;
+            if(!checkWall(player.x, ny).hit) player.y = ny;
+        }
 
         // BOSS AI: GIẢI MÊ CUNG + NÉ ĐẠN
         let next = findPath();
         let tx = next.c * GRID + GRID/2, ty = next.r * GRID + GRID/2;
         let bx = boss.x, by = boss.y, minRisk = 999999;
-        
-        for(let i=0; i<12; i++) {
-            let a = i * (Math.PI/6);
-            let sx = boss.x + Math.cos(a)*42, sy = boss.y + Math.sin(a)*42;
+        for(let i=0; i<8; i++) {
+            let a = i * Math.PI/4;
+            let sx = boss.x + Math.cos(a)*40, sy = boss.y + Math.sin(a)*40;
             let risk = Math.hypot(sx-tx, sy-ty);
-            bullets.forEach(b => { if(b.o==='p' && Math.hypot(sx-b.x, sy-b.y) < 75) risk += 10000; });
-            
-            // QUAN TRỌNG: KHÔNG CHO PHÉP BOSS CHẠY VÀO TƯỜNG DÙ TRONG BẤT KỲ TÌNH HUỐNG NÀO
+            bullets.forEach(b => { if(b.o==='p' && Math.hypot(sx-b.x, sy-b.y) < 70) risk += 10000; });
             if(!checkWall(sx, sy).hit && risk < minRisk) { minRisk = risk; bx = sx; by = sy; }
         }
-
-        // Kiểm tra va chạm lần cuối trước khi di chuyển Boss (CHẶN XIÊN TƯỜNG)
-        let bnx = boss.x + (bx - boss.x) * 0.12;
-        let bny = boss.y + (by - boss.y) * 0.12;
-        if(!checkWall(bnx, bny).hit) {
-            boss.x = bnx; boss.y = bny;
-        } else {
-            // Nếu vị trí mới bị kẹt, ép Boss đứng im hoặc chỉ di chuyển nếu an toàn
-            if(!checkWall(bnx, boss.y).hit) boss.x = bnx;
-            if(!checkWall(boss.x, bny).hit) boss.y = bny;
-        }
-
+        boss.x += (bx - boss.x) * 0.1; boss.y += (by - boss.y) * 0.1;
         boss.a = Math.atan2(player.y - boss.y, player.x - boss.x);
-        if(Math.random() < 0.02) fire(boss, '#f05', 'b');
+        if(Math.random() < 0.015) fire(boss, '#f05', 'b');
 
-        // ĐẠN
+        // BULLET PHYSICS: ANTI-STUCK SYSTEM
         bullets.forEach((b, i) => {
-            for(let s=0; s<4; s++) { // Sub-stepping chống xuyên tường
-                b.x += b.vx/4; b.y += b.vy/4;
+            let steps = 4;
+            for(let s=0; s<steps; s++) {
+                b.x += b.vx/steps; b.y += b.vy/steps;
                 let wall = checkWall(b.x, b.y);
                 if(wall.hit) {
                     if(wall.axis === 'x') b.vx *= -1; else b.vy *= -1;
-                    b.x += b.vx * 0.4; b.y += b.vy * 0.4; // Đẩy đạn ra ngay lập tức
+                    b.x += b.vx * 0.3; b.y += b.vy * 0.3; // Lực đẩy phản xạ chống kẹt
                     break;
                 }
             }
-            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 25 && b.o==='p') { boss.hp--; bullets.splice(i, 1); if(boss.hp<=0) endGame("CHIẾN THẮNG!"); }
-            if(Math.hypot(b.x-player.x, b.y-player.y) < 25 && b.o==='b') { player.hp--; bullets.splice(i, 1); if(player.hp<=0) endGame("THẤT BẠI!"); }
-            if(Date.now() - b.t > 7000) bullets.splice(i, 1);
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 25 && b.o==='p') { boss.hp--; bullets.splice(i, 1); if(boss.hp<=0) endGame("WIN!"); }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 25 && b.o==='b') { player.hp--; bullets.splice(i, 1); if(player.hp<=0) endGame("LOSE!"); }
+            if(Date.now() - b.t > 6000) bullets.splice(i, 1);
         });
         pHPText.innerText = player.hp; bHPText.innerText = boss.hp;
     }
@@ -186,13 +174,12 @@
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
         ctx.fillStyle = '#0f0'; ctx.fillRect(-18, -18, 36, 36); ctx.restore();
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
-        ctx.fillStyle = '#f05'; ctx.shadowBlur = 10; ctx.shadowColor = '#f05';
-        ctx.fillRect(-22, -22, 44, 44); ctx.restore(); ctx.shadowBlur = 0;
+        ctx.fillStyle = '#f05'; ctx.fillRect(-22, -22, 44, 44); ctx.restore();
 
         // Đạn & Đường dự đoán
         bullets.forEach(b => {
             let traj = getTrajectory(b.x, b.y, b.vx, b.vy);
-            ctx.beginPath(); ctx.strokeStyle = b.o==='p'?'rgba(0,255,0,0.2)':'rgba(255,0,85,0.2)';
+            ctx.beginPath(); ctx.strokeStyle = b.o==='p'?'rgba(0,255,0,0.15)':'rgba(255,0,85,0.15)';
             traj.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
             ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill();
         });
