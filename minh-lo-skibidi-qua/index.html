@@ -2,28 +2,29 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Tank Maze v34.0 - Hardcore Space Only</title>
+    <title>Tank Maze v33.0 - Matrix Evasion Boss</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; border: 1px solid #0f0; }
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; border: 1px solid #0f0; box-shadow: 0 0 10px #0f0; }
+        #msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 60px; display: none; text-shadow: 0 0 20px #0f0; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="color: #0ff; font-size: 11px; margin-bottom: 5px;">CORE: v34.0 - SPACE_TO_FIRE</div>
+    <div style="color: #0ff; font-size: 11px; margin-bottom: 5px; letter-spacing: 1px;">CORE: MATRIX_EVASION_v33</div>
     <div>TANK HP: <span id="p-hp" style="color:#0f0">5</span></div>
     <div>BOSS HP: <span id="b-hp" style="color:#f05; font-weight:bold;">7</span></div>
-    <div style="font-size: 10px; color: #aaa; margin-top:5px;">CONTROL: MOUSE=MOVE | SPACE=FIRE</div>
+    <div id="ai-status" style="font-size: 10px; color: #ff0; margin-top:5px;">AI: IDLE</div>
 </div>
-<div id="msg" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 60px; display: none; text-shadow: 0 0 20px #0f0; font-weight: bold; z-index:100;"></div>
+<div id="msg"></div>
 <canvas id="gameCanvas"></canvas>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), msg = document.getElementById('msg');
+    const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), aiStatus = document.getElementById('ai-status'), msg = document.getElementById('msg');
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
     const GRID = 90, B_SPEED = 7.2, P_SPEED = 4.5;
@@ -53,7 +54,7 @@
     genMaze();
 
     let player = { x: GRID/2, y: GRID/2, a: 0, hp: 5 };
-    let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 7 };
+    let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 7, targetA: 0 };
     let bullets = [], mouse = { x: 0, y: 0, down: false }, gameOver = false;
 
     function checkWall(x, y) {
@@ -90,47 +91,58 @@
         bullets.push({ x: obj.x, y: obj.y, vx: Math.cos(obj.a)*8, vy: Math.sin(obj.a)*8, c: color, o: owner, t: Date.now() });
     }
 
-    // --- KHÓA CHỨC NĂNG BẮN BẰNG CHUỘT ---
     window.onmousemove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
-    window.onmousedown = () => { mouse.down = true; }; // Chỉ dùng để di chuyển
-    window.onmouseup = () => { mouse.down = false; };
-    
-    // --- CHỈ CHO PHÉP BẮN BẰNG SPACE ---
-    window.onkeydown = (e) => { 
-        if(e.code === 'Space' && !gameOver) fire(player, '#0f0', 'p'); 
-    };
+    window.onmousedown = () => { if(!gameOver) fire(player, '#0f0', 'p'); };
 
     function update() {
         if(gameOver) return;
         
         // Player
         player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-        if(mouse.down) { // Chỉ di chuyển khi đè chuột, không bắn
-            let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
-            if(!checkWall(nx, player.y).hit) player.x = nx;
-            if(!checkWall(player.x, ny).hit) player.y = ny;
-        }
+        let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
+        if(!checkWall(nx, player.y).hit) player.x = nx;
+        if(!checkWall(player.x, ny).hit) player.y = ny;
 
-        // BOSS AI: NO STRATEGY SLIDE - ONLY ROTATION & PATH
+        // BOSS AI: MATRIX MODE
         let next = findPath();
         let targetX = next.c * GRID + GRID/2, targetY = next.r * GRID + GRID/2;
-        
-        // Boss di chuyển thẳng theo đường mê cung (Không lướt ngang)
-        let angleToTarget = Math.atan2(targetY - boss.y, targetX - boss.x);
-        let bnx = boss.x + Math.cos(angleToTarget) * (B_SPEED * 0.4);
-        let bny = boss.y + Math.sin(angleToTarget) * (B_SPEED * 0.4);
-        
-        if(!checkWall(bnx, bny).hit) {
-            boss.x = bnx; boss.y = bny;
+        let bx = boss.x, by = boss.y, minRisk = 999999;
+        let isDodging = false;
+
+        // Quét đa điểm để tìm vị trí né tốt nhất
+        for(let i=0; i<16; i++) {
+            let a = i * (Math.PI/8);
+            let sx = boss.x + Math.cos(a)*45, sy = boss.y + Math.sin(a)*45;
+            let risk = Math.hypot(sx-targetX, sy-targetY);
+            
+            bullets.forEach(b => {
+                if(b.o==='p') {
+                    let d = Math.hypot(sx-b.x, sy-b.y);
+                    if(d < 90) { 
+                        risk += (150 - d) * 2000; 
+                        isDodging = true;
+                    }
+                }
+            });
+
+            if(!checkWall(sx, sy).hit && risk < minRisk) {
+                minRisk = risk; bx = sx; by = sy;
+            }
         }
 
-        // BOSS XOAY XE NÉ ĐẠN TẠI CHỖ
-        let nearestBullet = bullets.filter(b=>b.o==='p').sort((a,b)=>Math.hypot(boss.x-a.x, boss.y-a.y) - Math.hypot(boss.x-b.x, boss.y-b.y))[0];
-        if(nearestBullet && Math.hypot(boss.x - nearestBullet.x, boss.y - nearestBullet.y) < 100) {
-            let bulletAngle = Math.atan2(nearestBullet.vy, nearestBullet.vx);
-            // Xoay thân xe vuông góc với đạn để đạn xẹt qua sườn
-            boss.a += (bulletAngle + Math.PI/2 - boss.a) * 0.25;
+        boss.x += (bx - boss.x) * 0.15; boss.y += (by - boss.y) * 0.15;
+
+        // XOAY XE NÉ ĐẠN (Matrix Effect)
+        if(isDodging) {
+            aiStatus.innerText = "AI: MATRIX EVASION!";
+            // Xoay thân xe vuông góc với viên đạn gần nhất để lách
+            let nearestBullet = bullets.filter(b=>b.o==='p').sort((a,b)=>Math.hypot(boss.x-a.x, boss.y-a.y) - Math.hypot(boss.x-b.x, boss.y-b.y))[0];
+            if(nearestBullet) {
+                let bulletAngle = Math.atan2(nearestBullet.vy, nearestBullet.vx);
+                boss.a += (bulletAngle + Math.PI/2 - boss.a) * 0.2;
+            }
         } else {
+            aiStatus.innerText = "AI: HUNTING...";
             let angleToPlayer = Math.atan2(player.y - boss.y, player.x - boss.x);
             boss.a += (angleToPlayer - boss.a) * 0.1;
         }
@@ -159,7 +171,7 @@
 
     function draw() {
         ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
         maze.forEach(r => r.forEach(c => {
             let x = c.c*GRID, y = c.r*GRID;
             ctx.beginPath();
@@ -170,11 +182,16 @@
             ctx.stroke();
         }));
 
+        // Player
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-18,-18,36,36); ctx.fillStyle = '#fff'; ctx.fillRect(10,-4,22,8); ctx.restore();
+        ctx.fillStyle = '#0f0'; ctx.fillRect(-18,-18,36,36); 
+        ctx.fillStyle = '#fff'; ctx.fillRect(10,-4,22,8); ctx.restore();
 
+        // Boss (Matrix Style)
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
-        ctx.fillStyle = '#f05'; ctx.fillRect(-22,-22,44,44); ctx.fillStyle = '#fff'; ctx.fillRect(12,-6,28,12); ctx.restore();
+        ctx.fillStyle = '#f05'; ctx.shadowBlur = aiStatus.innerText.includes("MATRIX") ? 25 : 5;
+        ctx.shadowColor = '#f05'; ctx.fillRect(-22,-22,44,44);
+        ctx.fillStyle = '#fff'; ctx.fillRect(12,-6,28,12); ctx.restore(); ctx.shadowBlur = 0;
 
         bullets.forEach(b => {
             ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill();
