@@ -3,21 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Maze v22.0 - Ultra Instinct AI</title>
+    <title>Tank Maze v22.1 - No Lag Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #010101; touch-action: none; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050505; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; }
-        .hp-bar { color: #ff0055; font-size: 28px; font-weight: 900; text-shadow: 0 0 10px rgba(255,0,85,0.5); }
-        .header { font-size: 12px; letter-spacing: 2px; color: #555; }
+        .hp-bar { color: #ff0055; font-size: 24px; font-weight: 900; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="header">SYSTEM: CORTEX-ULTRA-V22</div>
+    <div style="font-size: 10px; color: #555;">STABLE VERSION v22.1</div>
     <div>TANK HP: <span id="p-hp" style="color:#0f0">3</span> | BOSS HP: <span id="b-hp" class="hp-bar">5</span></div>
-    <div id="ai-status" style="font-size: 12px; color: #0af;">AI MODE: EVASIVE_MANEUVERING</div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -26,11 +24,10 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp');
-    const aiStatus = document.getElementById('ai-status');
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-    const GRID_SIZE = 100, BULLET_SPEED = 8, BOSS_SPEED = 3.5;
+    const GRID_SIZE = 100, BULLET_SPEED = 7, BOSS_SPEED = 3.5;
     const COLS = Math.floor(canvas.width / GRID_SIZE), ROWS = Math.floor(canvas.height / GRID_SIZE);
     
     // --- MÊ CUNG ---
@@ -66,7 +63,6 @@
     }
     initMaze();
 
-    // --- ĐỐI TƯỢNG ---
     let player = { x: GRID_SIZE/2, y: GRID_SIZE/2, angle: 0, hp: 3 };
     let boss = { x: (COLS-1)*GRID_SIZE+50, y: (ROWS-1)*GRID_SIZE+50, angle: 0, hp: 5 };
     let bullets = [];
@@ -86,20 +82,20 @@
     function calculateFuture(b) {
         let tx = b.x, ty = b.y, tvx = b.vx, tvy = b.vy;
         b.futurePoints = [{x: tx, y: ty}];
-        for(let i=0; i<8; i++) { // Dự đoán 8 lần nảy
-            for(let step=0; step<25; step++) {
+        for(let i=0; i<4; i++) { // Giảm xuống 4 lần nảy để tránh treo máy
+            for(let step=0; step<30; step++) {
                 tx += tvx; ty += tvy;
-                let col = checkWallCollision(tx, ty, tvx, tvy);
+                let col = checkWall(tx, ty, tvx, tvy);
                 if(col.hit) { if(col.axis === 'x') tvx*=-1; else tvy*=-1; break; }
             }
             b.futurePoints.push({x: tx, y: ty});
         }
     }
 
-    function checkWallCollision(x, y, vx, vy) {
+    function checkWall(x, y, vx, vy) {
         let cx = Math.floor(x/GRID_SIZE), cy = Math.floor(y/GRID_SIZE);
         if(!maze[cy] || !maze[cy][cx]) return { hit: true };
-        let b = 18;
+        let b = 15;
         if(vx > 0 && maze[cy][cx].walls[1] && x > (cx+1)*GRID_SIZE - b) return { hit: true, axis: 'x' };
         if(vx < 0 && maze[cy][cx].walls[3] && x < cx*GRID_SIZE + b) return { hit: true, axis: 'x' };
         if(vy > 0 && maze[cy][cx].walls[2] && y > (cy+1)*GRID_SIZE - b) return { hit: true, axis: 'y' };
@@ -107,23 +103,15 @@
         return { hit: false };
     }
 
-    // --- BỘ NÃO SIÊU CẤP CỦA BOSS ---
     function getRiskAt(tx, ty) {
+        if(checkWall(tx, ty, 0, 0).hit) return 999999;
         let risk = 0;
-        // Kiểm tra va chạm tường
-        if(checkWallCollision(tx, ty, 0, 0).hit) return 1000000;
-
         bullets.forEach(b => {
             if(b.owner === 'player' && b.futurePoints) {
                 for(let i=0; i<b.futurePoints.length-1; i++) {
                     let p1 = b.futurePoints[i], p2 = b.futurePoints[i+1];
-                    // Khoảng cách từ điểm kiểm tra tới đường đạn
-                    let l2 = Math.pow(p2.x-p1.x, 2) + Math.pow(p2.y-p1.y, 2);
-                    let t = ((tx-p1.x)*(p2.x-p1.x) + (ty-p1.y)*(p2.y-p1.y)) / l2;
-                    t = Math.max(0, Math.min(1, t));
-                    let dist = Math.hypot(tx - (p1.x + t*(p2.x-p1.x)), ty - (p1.y + t*(p2.y-p1.y)));
-                    
-                    if(dist < 55) risk += (55 - dist) * 1500; // Nguy cơ cực cao nếu đạn sát người
+                    let d = Math.abs((p2.x-p1.x)*(p1.y-ty) - (p1.x-tx)*(p2.y-p1.y)) / Math.hypot(p2.x-p1.x, p2.y-p1.y);
+                    if(d < 50) risk += (50-d) * 100;
                 }
             }
         });
@@ -138,85 +126,50 @@
         // Player Move
         let dx = mouse.x - player.x, dy = mouse.y - player.y;
         player.angle = Math.atan2(dy, dx);
-        if(mouse.down && Math.hypot(dx, dy) > 15) {
-            let sx = Math.cos(player.angle) * 4.5, sy = Math.sin(player.angle) * 4.5;
-            if(!checkWallCollision(player.x + sx, player.y, sx, 0).hit) player.x += sx;
-            if(!checkWallCollision(player.x, player.y + sy, 0, sy).hit) player.y += sy;
+        if(mouse.down && Math.hypot(dx, dy) > 10) {
+            let sx = Math.cos(player.angle) * 4, sy = Math.sin(player.angle) * 4;
+            if(!checkWall(player.x + sx, player.y, sx, 0).hit) player.x += sx;
+            if(!checkWall(player.x, player.y + sy, 0, sy).hit) player.y += sy;
         }
 
-        // BOSS ULTRA INSTINCT LOGIC
-        let currentRisk = getRiskAt(boss.x, boss.y);
-        let bestX = boss.x, bestY = boss.y, minRisk = currentRisk;
-
-        // Boss quét 16 hướng xung quanh để tìm vị trí an toàn nhất
-        for(let a=0; a < Math.PI*2; a += Math.PI/8) {
-            let tx = boss.x + Math.cos(a) * 40;
-            let ty = boss.y + Math.sin(a) * 40;
-            let risk = getRiskAt(tx, ty);
-            
-            // Ưu tiên điểm an toàn VÀ hướng về phía người chơi (để không chỉ biết chạy)
-            let distToPlayer = Math.hypot(tx - player.x, ty - player.y);
-            risk += distToPlayer * 0.2; 
-
-            if(risk < minRisk) {
-                minRisk = risk; bestX = tx; bestY = ty;
-            }
+        // Boss AI (Evasion + Hunting)
+        let minRisk = getRiskAt(boss.x, boss.y), bx = boss.x, by = boss.y;
+        for(let a=0; a<Math.PI*2; a+=Math.PI/4) {
+            let tx = boss.x + Math.cos(a)*35, ty = boss.y + Math.sin(a)*35;
+            let risk = getRiskAt(tx, ty) + Math.hypot(tx-player.x, ty-player.y)*0.1;
+            if(risk < minRisk) { minRisk = risk; bx = tx; by = ty; }
         }
-
-        if(minRisk < 500000) { // Nếu có đường thoát
-            boss.x += (bestX - boss.x) * 0.15;
-            boss.y += (bestY - boss.y) * 0.15;
-            aiStatus.innerText = minRisk > 100 ? "AI MODE: EVADING" : "AI MODE: HUNTING";
-            aiStatus.style.color = minRisk > 100 ? "#ff0" : "#0af";
-        }
-
+        boss.x += (bx - boss.x) * 0.1; boss.y += (by - boss.y) * 0.1;
         boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
-        if(Date.now() - lastBossFire > 1200) { fire(boss, '#f00', 'boss'); lastBossFire = Date.now(); }
 
-        // Bullet Logic
+        if(Date.now() - lastBossFire > 1200) { fire(boss, '#f05', 'boss'); lastBossFire = Date.now(); }
+
         bullets.forEach((b, i) => {
-            for(let s=0; s<4; s++) {
-                let nx = b.x + b.vx/4, ny = b.y + b.vy/4;
-                let col = checkWallCollision(nx, ny, b.vx, b.vy);
-                if(col.hit) { if(col.axis === 'x') b.vx *= -1; else b.vy *= -1; break; }
-                b.x = nx; b.y = ny;
-            }
-            if(Date.now() - b.spawnTime > BULLET_LIFE) bullets.splice(i, 1);
-            if(Math.hypot(b.x - boss.x, b.y - boss.y) < 22 && b.owner === 'player') {
-                boss.hp--; bHPText.innerText = boss.hp; bullets.splice(i, 1);
-            }
-            if(Math.hypot(b.x - player.x, b.y - player.y) < 22 && b.owner === 'boss') {
-                player.hp--; pHPText.innerText = player.hp; bullets.splice(i, 1);
-            }
+            b.x += b.vx; b.y += b.vy;
+            let col = checkWall(b.x, b.y, b.vx, b.vy);
+            if(col.hit) { if(col.axis === 'x') b.vx*=-1; else b.vy*=-1; }
+            if(Date.now() - b.spawnTime > 4000) bullets.splice(i, 1);
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 20 && b.owner==='player') { boss.hp--; bHPText.innerText=boss.hp; bullets.splice(i, 1); }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 20 && b.owner==='boss') { player.hp--; pHPText.innerText=player.hp; bullets.splice(i, 1); }
         });
     }
 
     function draw() {
-        ctx.fillStyle = '#010101'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        maze.forEach(row => row.forEach(c => c.draw()));
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        maze.forEach(r => r.forEach(c => c.draw()));
 
         // Player
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-22, -20, 44, 40); ctx.fillStyle = '#0a0'; ctx.fillRect(10, -6, 35, 12);
+        ctx.fillStyle = '#0f0'; ctx.fillRect(-20, -18, 40, 36);
         ctx.restore();
 
-        // Boss (Cực ngầu với hiệu ứng hào quang)
+        // Boss
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
-        ctx.shadowBlur = 15; ctx.shadowColor = '#f05';
-        ctx.fillStyle = '#f05'; ctx.fillRect(-25, -25, 50, 50); 
-        ctx.fillStyle = '#fff'; ctx.fillRect(12, -8, 30, 16);
-        ctx.restore(); ctx.shadowBlur = 0;
+        ctx.fillStyle = '#f05'; ctx.fillRect(-22, -22, 44, 44);
+        ctx.restore();
 
-        // Đạn & Đường dự báo nguy hiểm (Chỉ hiện khi đạn bay gần Boss)
         bullets.forEach(b => {
-            if(b.owner === 'player' && b.futurePoints) {
-                ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-                ctx.setLineDash([5, 5]);
-                b.futurePoints.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
-                ctx.setLineDash([]);
-            }
-            ctx.fillStyle = b.color; ctx.shadowBlur = 10; ctx.shadowColor = b.color;
-            ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
         });
 
         update(); requestAnimationFrame(draw);
