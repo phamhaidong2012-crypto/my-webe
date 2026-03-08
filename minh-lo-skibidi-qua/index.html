@@ -2,22 +2,25 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Tank Maze v29.0 - Hardcore Physics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tank Maze v30.0 - No-Clip Justice</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
-        #ui { position: fixed; top: 10px; left: 10px; color: #0f0; pointer-events: none; background: rgba(0,0,0,0.7); padding: 10px; border: 1px solid #333; }
-        #msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 60px; display: none; text-shadow: 0 0 20px #f00; }
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; background: rgba(0,0,0,0.6); padding: 12px; border: 1px solid #333; border-radius: 8px; }
+        .boss-hp { color: #ff0055; font-weight: bold; }
+        #msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 60px; display: none; z-index: 100; text-shadow: 0 0 20px #f00; text-align: center; font-weight: 900; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="color: #ff0;">[ CORE V29.0: RAY-CAST PHYSICS ]</div>
+    <div style="font-size: 11px; color: #0af; margin-bottom: 5px;">ENGINE: V30.0 - RAY_TRACE_COLLISION</div>
     <div>TANK HP: <span id="p-hp" style="color:#0f0">5</span></div>
-    <div>BOSS HP: <span id="b-hp" style="color:#f05">7</span></div>
+    <div>BOSS HP: <span id="b-hp" class="boss-hp">7</span></div>
 </div>
 <div id="msg"></div>
+
 <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -26,10 +29,9 @@
     const pHPText = document.getElementById('p-hp'), bHPText = document.getElementById('b-hp'), msg = document.getElementById('msg');
 
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-    const GRID = 90, B_SPEED = 7.5, P_SPEED = 4.5;
+    const GRID = 90, B_SPEED = 7, P_SPEED = 4.5;
     const COLS = Math.floor(canvas.width / GRID), ROWS = Math.floor(canvas.height / GRID);
-
-    // --- MÊ CUNG ---
+    
     let maze = [];
     for (let r = 0; r < ROWS; r++) {
         maze[r] = [];
@@ -48,20 +50,21 @@
                 let next = neighbors[Math.floor(Math.random()*neighbors.length)];
                 next.cell.v = true; stack.push(curr);
                 curr.walls[next.w1] = false; next.cell.walls[next.w2] = false; curr = next.cell;
-            } else if (stack.length > 0) curr = stack.pop(); else break;
+            } else if (stack.length > 0) curr = stack.pop();
+            else break;
         }
     }
     genMaze();
 
     let player = { x: GRID/2, y: GRID/2, a: 0, hp: 5 };
     let boss = { x: (COLS-1)*GRID+GRID/2, y: (ROWS-1)*GRID+GRID/2, a: 0, hp: 7 };
-    let bullets = [], mouse = { x: 0, y: 0, down: false }, gameOver = false;
+    let bullets = [], gameOver = false, mouse = { x: 0, y: 0, down: false };
 
-    // --- KIỂM TRA TƯỜNG (RAY-CASTING) ---
-    function isHittingWall(x, y) {
+    // --- KIỂM TRA VA CHẠM TƯỜNG (FIX XUYÊN TƯỜNG) ---
+    function checkWall(x, y) {
         let cx = Math.floor(x/GRID), cy = Math.floor(y/GRID);
         if(!maze[cy] || !maze[cy][cx]) return { hit: true };
-        let b = 18, rx = x % GRID, ry = y % GRID;
+        let b = 20, rx = x % GRID, ry = y % GRID;
         if(maze[cy][cx].walls[0] && ry < b) return { hit: true, axis: 'y' };
         if(maze[cy][cx].walls[1] && rx > GRID-b) return { hit: true, axis: 'x' };
         if(maze[cy][cx].walls[2] && ry > GRID-b) return { hit: true, axis: 'y' };
@@ -69,20 +72,26 @@
         return { hit: false };
     }
 
-    // --- AI TÌM ĐƯỜNG A* ---
-    function getPath() {
+    // --- AI TÌM ĐƯỜNG A* (CHỦ ĐỘNG GIẢI MÊ CUNG) ---
+    function findPath() {
         let start = {c: Math.floor(boss.x/GRID), r: Math.floor(boss.y/GRID)};
         let target = {c: Math.floor(player.x/GRID), r: Math.floor(player.y/GRID)};
         let q = [[start]], visited = new Set([`${start.c},${start.r}`]);
+        
         while(q.length > 0) {
             let path = q.shift(), curr = path[path.length-1];
             if(curr.c === target.c && curr.r === target.r) return path[1] || path[0];
-            [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d => {
+            
+            let dirs = [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]];
+            for(let d of dirs) {
                 if(!maze[curr.r][curr.c].walls[d[2]]) {
                     let nc = curr.c+d[0], nr = curr.r+d[1];
-                    if(!visited.has(`${nc},${nr}`)) { visited.add(`${nc},${nr}`); q.push([...path, {c: nc, r: nr}]); }
+                    if(maze[nr] && maze[nr][nc] && !visited.has(`${nc},${nr}`)) {
+                        visited.add(`${nc},${nr}`);
+                        q.push([...path, {c: nc, r: nr}]);
+                    }
                 }
-            });
+            }
         }
         return start;
     }
@@ -98,53 +107,69 @@
 
     function update() {
         if(gameOver) return;
-
-        // Player Move
+        
+        // Player Movement
         player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
         if(mouse.down && Math.hypot(mouse.x-player.x, mouse.y-player.y) > 20) {
             let nx = player.x + Math.cos(player.a)*P_SPEED, ny = player.y + Math.sin(player.a)*P_SPEED;
-            if(!isHittingWall(nx, player.y).hit) player.x = nx;
-            if(!isHittingWall(player.x, ny).hit) player.y = ny;
+            if(!checkWall(nx, player.y).hit) player.x = nx;
+            if(!checkWall(player.x, ny).hit) player.y = ny;
         }
 
-        // BOSS AI: GIẢI MÊ CUNG + NÉ ĐẠN
-        let next = getPath();
-        let targetX = next.c * GRID + GRID/2, targetY = next.r * GRID + GRID/2;
+        // BOSS LOGIC: HUNTER AI
+        let nextCell = findPath();
+        let targetX = nextCell.c * GRID + GRID/2, targetY = nextCell.r * GRID + GRID/2;
         
         let bx = boss.x, by = boss.y, minRisk = 999999;
+        // Quét 12 hướng xung quanh để chọn vị trí di chuyển tốt nhất
         for(let i=0; i<12; i++) {
-            let a = i * Math.PI/6;
+            let a = i * (Math.PI/6);
             let sx = boss.x + Math.cos(a)*40, sy = boss.y + Math.sin(a)*40;
-            let risk = Math.hypot(sx-targetX, sy-targetY); // Điểm đến mê cung
             
-            bullets.forEach(b => {
+            // Risk = Khoảng cách tới mục tiêu + Tránh đạn của ông
+            let risk = Math.hypot(sx-targetX, sy-targetY);
+            bullets.forEach(b => { 
                 if(b.o==='p') {
-                    let d = Math.hypot(sx-b.x, sy-b.y);
-                    if(d < 70) risk += (70-d) * 200; // Tăng risk cực cao khi gần đạn
+                    let dist = Math.hypot(sx-b.x, sy-b.y);
+                    if(dist < 80) risk += (100 - dist) * 1000; 
                 }
             });
-            if(!isHittingWall(sx, sy).hit && risk < minRisk) { minRisk = risk; bx = sx; by = sy; }
+
+            if(!checkWall(sx, sy).hit && risk < minRisk) {
+                minRisk = risk; bx = sx; by = sy;
+            }
         }
-        boss.x += (bx - boss.x) * 0.12; boss.y += (by - boss.y) * 0.12;
+        boss.x += (bx - boss.x) * 0.12; 
+        boss.y += (by - boss.y) * 0.12;
         boss.a = Math.atan2(player.y - boss.y, player.x - boss.x);
 
+        // Boss chỉ bắn khi nạp đạn xong
         if(Math.random() < 0.02) fire(boss, '#f05', 'b');
 
-        // BULLET PHYSICS: CHỐNG XUYÊN TƯỜNG (SUB-STEPPING)
+        // BULLET PHYSICS: SUB-STEPPING (CHỐNG XUYÊN TƯỜNG)
         bullets.forEach((b, i) => {
-            let steps = 4; // Chia mỗi frame thành 4 bước nhỏ để kiểm tra va chạm
-            for(let s=0; s<steps; s++) {
-                b.x += b.vx/steps; b.y += b.vy/steps;
-                let wall = isHittingWall(b.x, b.y);
+            let subSteps = 4; // Chia 1 frame thành 4 lần kiểm tra va chạm cực nhỏ
+            for(let s=0; s<subSteps; s++) {
+                let nextX = b.x + b.vx/subSteps;
+                let nextY = b.y + b.vy/subSteps;
+                
+                let wall = checkWall(nextX, nextY);
                 if(wall.hit) {
                     if(wall.axis === 'x') b.vx *= -1; else b.vy *= -1;
-                    // Đẩy ngược đạn ra một chút để không bị kẹt trong tường
-                    b.x += b.vx/steps; b.y += b.vy/steps;
-                    break;
+                    break; 
                 }
+                b.x = nextX; b.y = nextY;
             }
-            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 25 && b.o==='p') { boss.hp--; bullets.splice(i, 1); if(boss.hp<=0) endGame("VICTORY"); }
-            if(Math.hypot(b.x-player.x, b.y-player.y) < 25 && b.o==='b') { player.hp--; bullets.splice(i, 1); if(player.hp<=0) endGame("GAME OVER"); }
+
+            // Hit Detection
+            if(Math.hypot(b.x-boss.x, b.y-boss.y) < 25 && b.o==='p') { 
+                boss.hp--; bullets.splice(i, 1); 
+                if(boss.hp<=0) endGame("CHIẾN THẮNG!"); 
+            }
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 25 && b.o==='b') { 
+                player.hp--; bullets.splice(i, 1); 
+                if(player.hp<=0) endGame("THẤT BẠI!"); 
+            }
             if(Date.now() - b.t > 6000) bullets.splice(i, 1);
         });
         pHPText.innerText = player.hp; bHPText.innerText = boss.hp;
@@ -155,35 +180,39 @@
     function draw() {
         ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
         
-        // Vẽ tường
+        // Mê cung
         ctx.strokeStyle = '#333'; ctx.lineWidth = 4;
         maze.forEach(r => r.forEach(c => {
             let x = c.c*GRID, y = c.r*GRID;
             ctx.beginPath();
             if(c.walls[0]) { ctx.moveTo(x,y); ctx.lineTo(x+GRID,y); }
             if(c.walls[1]) { ctx.moveTo(x+GRID,y); ctx.lineTo(x+GRID,y+GRID); }
-            if(c.walls[2]) { ctx.beginPath(); ctx.moveTo(x+GRID,y+GRID); ctx.lineTo(x,y+GRID); } // Fix line path
-            if(c.walls[3]) { ctx.beginPath(); ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); }
+            if(c.walls[2]) { ctx.moveTo(x+GRID,y+GRID); ctx.lineTo(x,y+GRID); }
+            if(c.walls[3]) { ctx.moveTo(x,y+GRID); ctx.lineTo(x,y); }
             ctx.stroke();
         }));
 
-        // Player
+        // Tank Player
         ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-18, -18, 36, 36);
-        ctx.fillStyle = '#fff'; ctx.fillRect(10, -5, 25, 10); ctx.restore();
+        ctx.fillStyle = '#0f0'; ctx.fillRect(-18, -18, 36, 36); 
+        ctx.fillStyle = '#fff'; ctx.fillRect(12, -5, 25, 10);
+        ctx.restore();
 
-        // Boss
+        // Tank Boss (To hơn, gấu hơn)
         ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
         ctx.fillStyle = '#f05'; ctx.shadowBlur = 15; ctx.shadowColor = '#f05';
-        ctx.fillRect(-22, -22, 44, 44);
-        ctx.fillStyle = '#fff'; ctx.fillRect(12, -6, 30, 12); ctx.restore(); ctx.shadowBlur = 0;
+        ctx.fillRect(-22, -22, 44, 44); 
+        ctx.fillStyle = '#fff'; ctx.fillRect(15, -6, 30, 12);
+        ctx.restore(); ctx.shadowBlur = 0;
 
         // Bullets
         bullets.forEach(b => {
-            ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI*2); ctx.fill();
-            // Đuôi đạn (trail)
+            ctx.fillStyle = b.c;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI*2); ctx.fill();
+            // Vẽ hướng bay nhỏ
             ctx.strokeStyle = b.c; ctx.globalAlpha = 0.3; ctx.beginPath();
-            ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx*2, b.y - b.vy*2); ctx.stroke(); ctx.globalAlpha = 1;
+            ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.vx*2, b.y + b.vy*2); ctx.stroke();
+            ctx.globalAlpha = 1;
         });
 
         update(); requestAnimationFrame(draw);
