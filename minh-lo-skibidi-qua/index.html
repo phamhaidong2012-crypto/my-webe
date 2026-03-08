@@ -2,168 +2,164 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Tank Maze v34.0 - Hardcore Space Only</title>
-
+<title>Tank Maze v35.0 - Hardcore Space Only</title>
 <style>
-body{margin:0;overflow:hidden;background:#000;font-family:'Segoe UI',sans-serif}
-canvas{display:block}
-#ui{position:fixed;top:15px;left:15px;color:#0f0;background:rgba(0,0,0,.8);padding:12px;border-radius:8px;border:1px solid #0f0}
+body{margin:0;overflow:hidden;background:#000;font-family:'Segoe UI',sans-serif;}
+canvas{display:block;}
+#ui{position:fixed;top:15px;left:15px;color:#0f0;background:rgba(0,0,0,0.8);padding:12px;border-radius:8px;border:1px solid #0f0;}
 </style>
 </head>
 
 <body>
 
 <div id="ui">
-<div style="color:#0ff;font-size:11px;margin-bottom:5px;">CORE v34.0</div>
+<div style="color:#0ff;font-size:11px;margin-bottom:5px;">CORE: v35.0</div>
 <div>TANK HP: <span id="p-hp">5</span></div>
 <div>BOSS HP: <span id="b-hp">7</span></div>
 <div style="font-size:10px;color:#aaa;margin-top:5px;">MOUSE=MOVE | SPACE=FIRE</div>
 </div>
 
 <div id="msg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-color:#fff;font-size:60px;display:none;text-shadow:0 0 20px #0f0;font-weight:bold"></div>
+color:#fff;font-size:60px;display:none;text-shadow:0 0 20px #0f0;font-weight:bold;"></div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
 
-const canvas=document.getElementById('gameCanvas')
-const ctx=canvas.getContext('2d')
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
 
-const pHPText=document.getElementById('p-hp')
-const bHPText=document.getElementById('b-hp')
-const msg=document.getElementById('msg')
+const pHPText=document.getElementById('p-hp');
+const bHPText=document.getElementById('b-hp');
+const msg=document.getElementById('msg');
 
-canvas.width=innerWidth
-canvas.height=innerHeight
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
 
-const GRID=90
-const B_SPEED=7.2
-const P_SPEED=4.5
+const GRID=90;
+const B_SPEED=3.2;
+const P_SPEED=4.5;
 
-const COLS=Math.floor(canvas.width/GRID)
-const ROWS=Math.floor(canvas.height/GRID)
+const COLS=Math.floor(canvas.width/GRID);
+const ROWS=Math.floor(canvas.height/GRID);
 
-let maze=[]
+let maze=[];
 
 for(let r=0;r<ROWS;r++){
-maze[r]=[]
+maze[r]=[];
 for(let c=0;c<COLS;c++)
-maze[r][c]={c,r,walls:[true,true,true,true],v:false}
+maze[r][c]={c,r,walls:[true,true,true,true],v:false};
 }
 
 function genMaze(){
-
-let curr=maze[0][0]
-let stack=[]
-curr.v=true
+let curr=maze[0][0],stack=[];
+curr.v=true;
 
 while(true){
 
-let neighbors=[]
-let {c,r}=curr
+let neighbors=[];
+let {c,r}=curr;
 
 [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d=>{
-
-let n=maze[r+d[1]]&&maze[r+d[1]][c+d[0]]
-
-if(n&&!n.v)
-neighbors.push({cell:n,w1:d[2],w2:d[3]})
-
-})
+let n=maze[r+d[1]] && maze[r+d[1]][c+d[0]];
+if(n && !n.v) neighbors.push({cell:n,w1:d[2],w2:d[3]});
+});
 
 if(neighbors.length){
+let next=neighbors[Math.floor(Math.random()*neighbors.length)];
+next.cell.v=true;
+stack.push(curr);
 
-let next=neighbors[Math.floor(Math.random()*neighbors.length)]
+curr.walls[next.w1]=false;
+next.cell.walls[next.w2]=false;
 
-next.cell.v=true
-stack.push(curr)
-
-curr.walls[next.w1]=false
-next.cell.walls[next.w2]=false
-
-curr=next.cell
-
-}else if(stack.length){
-
-curr=stack.pop()
-
-}else break
+curr=next.cell;
 }
+else if(stack.length) curr=stack.pop();
+else break;
 
 }
+}
 
-genMaze()
+genMaze();
 
-let player={x:GRID/2,y:GRID/2,a:0,hp:5}
-let boss={x:(COLS-1)*GRID+GRID/2,y:(ROWS-1)*GRID+GRID/2,a:0,hp:7}
+let player={x:GRID/2,y:GRID/2,a:0,hp:5};
+let boss={x:(COLS-1)*GRID+GRID/2,y:(ROWS-1)*GRID+GRID/2,a:0,hp:7};
 
-let bullets=[]
-let mouse={x:0,y:0,down:false}
-let gameOver=false
+let bullets=[];
+let mouse={x:0,y:0,down:false};
+let gameOver=false;
 
 function checkWall(x,y){
 
-let cx=Math.floor(x/GRID)
-let cy=Math.floor(y/GRID)
+let cx=Math.floor(x/GRID);
+let cy=Math.floor(y/GRID);
 
-if(!maze[cy]||!maze[cy][cx])return{hit:true}
+if(!maze[cy] || !maze[cy][cx]) return {hit:true};
 
-let b=22
-let rx=x%GRID
-let ry=y%GRID
+let b=22;
+let rx=x%GRID;
+let ry=y%GRID;
 
-if(maze[cy][cx].walls[0]&&ry<b)return{hit:true,axis:'y'}
-if(maze[cy][cx].walls[1]&&rx>GRID-b)return{hit:true,axis:'x'}
-if(maze[cy][cx].walls[2]&&ry>GRID-b)return{hit:true,axis:'y'}
-if(maze[cy][cx].walls[3]&&rx<b)return{hit:true,axis:'x'}
+if(maze[cy][cx].walls[0] && ry<b) return {hit:true,axis:'y'};
+if(maze[cy][cx].walls[1] && rx>GRID-b) return {hit:true,axis:'x'};
+if(maze[cy][cx].walls[2] && ry>GRID-b) return {hit:true,axis:'y'};
+if(maze[cy][cx].walls[3] && rx<b) return {hit:true,axis:'x'};
 
-return{hit:false}
-
+return {hit:false};
 }
 
 function findPath(){
 
-let start={c:Math.floor(boss.x/GRID),r:Math.floor(boss.y/GRID)}
-let target={c:Math.floor(player.x/GRID),r:Math.floor(player.y/GRID)}
+let start={c:Math.floor(boss.x/GRID),r:Math.floor(boss.y/GRID)};
+let target={c:Math.floor(player.x/GRID),r:Math.floor(player.y/GRID)};
 
-let q=[[start]]
-let visited=new Set([`${start.c},${start.r}`])
+if(!maze[start.r] || !maze[start.r][start.c]) return start;
+if(!maze[target.r] || !maze[target.r][target.c]) return start;
+
+let q=[[start]];
+let visited=new Set([`${start.c},${start.r}`]);
 
 while(q.length){
 
-let path=q.shift()
-let curr=path[path.length-1]
+let path=q.shift();
+let curr=path[path.length-1];
 
-if(curr.c===target.c&&curr.r===target.r)
-return path[1]||path[0]
+if(curr.c===target.c && curr.r===target.r)
+return path[1] || path[0];
 
 [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d=>{
 
-if(maze[curr.r]&&!maze[curr.r][curr.c].walls[d[2]]){
+if(
+maze[curr.r] &&
+maze[curr.r][curr.c] &&
+!maze[curr.r][curr.c].walls[d[2]]
+){
 
-let nc=curr.c+d[0]
-let nr=curr.r+d[1]
+let nc=curr.c+d[0];
+let nr=curr.r+d[1];
 
-if(maze[nr]&&maze[nr][nc]&&!visited.has(`${nc},${nr}`)){
-
-visited.add(`${nc},${nr}`)
-q.push([...path,{c:nc,r:nr}])
-
+if(
+nr>=0 && nr<ROWS &&
+nc>=0 && nc<COLS &&
+maze[nr] &&
+maze[nr][nc] &&
+!visited.has(`${nc},${nr}`)
+){
+visited.add(`${nc},${nr}`);
+q.push([...path,{c:nc,r:nr}]);
 }
 
 }
 
-})
+});
 
 }
 
-return start
-
+return start;
 }
 
 function fire(obj,color,owner){
-
 bullets.push({
 x:obj.x,
 y:obj.y,
@@ -172,119 +168,76 @@ vy:Math.sin(obj.a)*8,
 c:color,
 o:owner,
 t:Date.now()
-})
-
+});
 }
 
 window.onmousemove=e=>{
-mouse.x=e.clientX
-mouse.y=e.clientY
-}
+mouse.x=e.clientX;
+mouse.y=e.clientY;
+};
 
-window.onmousedown=()=>mouse.down=true
-window.onmouseup=()=>mouse.down=false
+window.onmousedown=()=>mouse.down=true;
+window.onmouseup=()=>mouse.down=false;
 
 window.onkeydown=e=>{
-if(e.code==='Space'&&!gameOver)
-fire(player,'#0f0','p')
+if(e.code==='Space' && !gameOver)
+fire(player,'#0f0','p');
+};
+
+function bossAI(){
+
+let next=findPath();
+
+let targetX=next.c*GRID+GRID/2;
+let targetY=next.r*GRID+GRID/2;
+
+let dx=targetX-boss.x;
+let dy=targetY-boss.y;
+
+let dist=Math.hypot(dx,dy);
+
+let angle=Math.atan2(dy,dx);
+
+let nx=boss.x+Math.cos(angle)*B_SPEED;
+let ny=boss.y+Math.sin(angle)*B_SPEED;
+
+let w=checkWall(nx,ny);
+
+if(!w.hit){
+boss.x=nx;
+boss.y=ny;
 }
 
+let predictX=player.x+(player.x-boss.x)*0.3;
+let predictY=player.y+(player.y-boss.y)*0.3;
 
+let targetAngle=Math.atan2(predictY-boss.y,predictX-boss.x);
 
-/* ===== BOSS AI THÔNG MINH (KHÔNG XUYÊN TƯỜNG) ===== */
+boss.a+=(targetAngle-boss.a)*0.12;
 
-let lastPlayer={x:player.x,y:player.y}
-
-function predictPlayer(){
-
-let vx=player.x-lastPlayer.x
-let vy=player.y-lastPlayer.y
-
-lastPlayer.x=player.x
-lastPlayer.y=player.y
-
-return{
-x:player.x+vx*8,
-y:player.y+vy*8
-}
-
-}
-
-function extremeBossAI(){
-
-let dist=Math.hypot(player.x-boss.x,player.y-boss.y)
-
-let nearestBullet=bullets
-.filter(b=>b.o==='p')
-.sort((a,b)=>Math.hypot(boss.x-a.x,boss.y-a.y)-Math.hypot(boss.x-b.x,boss.y-b.y))[0]
-
-if(nearestBullet && Math.hypot(boss.x-nearestBullet.x,boss.y-nearestBullet.y)<120){
-
-let ang=Math.atan2(nearestBullet.vy,nearestBullet.vx)
-
-boss.a+=(ang+Math.PI/2-boss.a)*0.4
-
-let nx=boss.x+Math.cos(boss.a+Math.PI/2)*3
-let ny=boss.y+Math.sin(boss.a+Math.PI/2)*3
-
-if(!checkWall(nx,ny).hit){
-boss.x=nx
-boss.y=ny
-}
-
-return
-}
-
-if(dist<220){
-
-let future=predictPlayer()
-
-let ang=Math.atan2(future.y-boss.y,future.x-boss.x)
-
-boss.a+=(ang-boss.a)*0.3
-
-if(Math.random()<0.08)
-fire(boss,'#f05','b')
-
-}
-
-let next=findPath()
-
-let tx=next.c*GRID+GRID/2
-let ty=next.r*GRID+GRID/2
-
-let ang=Math.atan2(ty-boss.y,tx-boss.x)
-
-let nx=boss.x+Math.cos(ang)*2.5
-let ny=boss.y+Math.sin(ang)*2.5
-
-if(!checkWall(nx,ny).hit){
-boss.x=nx
-boss.y=ny
+if(dist<GRID*4){
+if(Math.random()<0.06) fire(boss,'#f05','b');
+}else{
+if(Math.random()<0.02) fire(boss,'#f05','b');
 }
 
 }
-
-
 
 function update(){
 
-if(gameOver)return
+if(gameOver) return;
 
-extremeBossAI()
+bossAI();
 
-player.a=Math.atan2(mouse.y-player.y,mouse.x-player.x)
+player.a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
 
 if(mouse.down){
 
-let nx=player.x+Math.cos(player.a)*P_SPEED
-let ny=player.y+Math.sin(player.a)*P_SPEED
+let nx=player.x+Math.cos(player.a)*P_SPEED;
+let ny=player.y+Math.sin(player.a)*P_SPEED;
 
-if(!checkWall(nx,player.y).hit)
-player.x=nx
-
-if(!checkWall(player.x,ny).hit)
-player.y=ny
+if(!checkWall(nx,player.y).hit) player.x=nx;
+if(!checkWall(player.x,ny).hit) player.y=ny;
 
 }
 
@@ -292,108 +245,102 @@ bullets.forEach((b,i)=>{
 
 for(let s=0;s<4;s++){
 
-b.x+=b.vx/4
-b.y+=b.vy/4
+b.x+=b.vx/4;
+b.y+=b.vy/4;
 
-let w=checkWall(b.x,b.y)
+let w=checkWall(b.x,b.y);
 
 if(w.hit){
-
-if(w.axis==='x')b.vx*=-1
-else b.vy*=-1
-
-break
+if(w.axis==='x') b.vx*=-1;
+else b.vy*=-1;
+break;
 }
 
 }
 
-if(Math.hypot(b.x-boss.x,b.y-boss.y)<22&&b.o==='p'){
-boss.hp--
-bullets.splice(i,1)
-if(boss.hp<=0)endGame("WIN!")
+if(Math.hypot(b.x-boss.x,b.y-boss.y)<22 && b.o==='p'){
+boss.hp--;
+bullets.splice(i,1);
+if(boss.hp<=0) endGame("WIN!");
 }
 
-if(Math.hypot(b.x-player.x,b.y-player.y)<22&&b.o==='b'){
-player.hp--
-bullets.splice(i,1)
-if(player.hp<=0)endGame("LOSE!")
+if(Math.hypot(b.x-player.x,b.y-player.y)<22 && b.o==='b'){
+player.hp--;
+bullets.splice(i,1);
+if(player.hp<=0) endGame("LOSE!");
 }
 
-if(Date.now()-b.t>6000)
-bullets.splice(i,1)
+if(Date.now()-b.t>6000) bullets.splice(i,1);
 
-})
+});
 
-pHPText.innerText=player.hp
-bHPText.innerText=boss.hp
+pHPText.innerText=player.hp;
+bHPText.innerText=boss.hp;
 
 }
 
 function endGame(s){
-
-gameOver=true
-msg.innerText=s
-msg.style.display='block'
-
-setTimeout(()=>location.reload(),3000)
-
+gameOver=true;
+msg.innerText=s;
+msg.style.display='block';
+setTimeout(()=>location.reload(),3000);
 }
 
 function draw(){
 
-ctx.fillStyle='#000'
-ctx.fillRect(0,0,canvas.width,canvas.height)
+ctx.fillStyle='#000';
+ctx.fillRect(0,0,canvas.width,canvas.height);
 
-ctx.strokeStyle='#222'
-ctx.lineWidth=2
+ctx.strokeStyle='#222';
+ctx.lineWidth=2;
 
 maze.forEach(r=>r.forEach(c=>{
 
-let x=c.c*GRID
-let y=c.r*GRID
+let x=c.c*GRID;
+let y=c.r*GRID;
 
-ctx.beginPath()
+ctx.beginPath();
 
-if(c.walls[0]){ctx.moveTo(x,y);ctx.lineTo(x+GRID,y)}
-if(c.walls[1]){ctx.moveTo(x+GRID,y);ctx.lineTo(x+GRID,y+GRID)}
-if(c.walls[2]){ctx.moveTo(x+GRID,y+GRID);ctx.lineTo(x,y+GRID)}
-if(c.walls[3]){ctx.moveTo(x,y+GRID);ctx.lineTo(x,y)}
+if(c.walls[0]){ctx.moveTo(x,y);ctx.lineTo(x+GRID,y);}
+if(c.walls[1]){ctx.moveTo(x+GRID,y);ctx.lineTo(x+GRID,y+GRID);}
+if(c.walls[2]){ctx.moveTo(x+GRID,y+GRID);ctx.lineTo(x,y+GRID);}
+if(c.walls[3]){ctx.moveTo(x,y+GRID);ctx.lineTo(x,y);}
 
-ctx.stroke()
+ctx.stroke();
 
-}))
+}));
 
-ctx.save()
-ctx.translate(player.x,player.y)
-ctx.rotate(player.a)
-ctx.fillStyle='#0f0'
-ctx.fillRect(-18,-18,36,36)
-ctx.fillStyle='#fff'
-ctx.fillRect(10,-4,22,8)
-ctx.restore()
+ctx.save();
+ctx.translate(player.x,player.y);
+ctx.rotate(player.a);
+ctx.fillStyle='#0f0';
+ctx.fillRect(-18,-18,36,36);
+ctx.fillStyle='#fff';
+ctx.fillRect(10,-4,22,8);
+ctx.restore();
 
-ctx.save()
-ctx.translate(boss.x,boss.y)
-ctx.rotate(boss.a)
-ctx.fillStyle='#f05'
-ctx.fillRect(-22,-22,44,44)
-ctx.fillStyle='#fff'
-ctx.fillRect(12,-6,28,12)
-ctx.restore()
+ctx.save();
+ctx.translate(boss.x,boss.y);
+ctx.rotate(boss.a);
+ctx.fillStyle='#f05';
+ctx.fillRect(-22,-22,44,44);
+ctx.fillStyle='#fff';
+ctx.fillRect(12,-6,28,12);
+ctx.restore();
 
 bullets.forEach(b=>{
-ctx.fillStyle=b.c
-ctx.beginPath()
-ctx.arc(b.x,b.y,7,0,7)
-ctx.fill()
-})
+ctx.fillStyle=b.c;
+ctx.beginPath();
+ctx.arc(b.x,b.y,7,0,7);
+ctx.fill();
+});
 
-update()
-requestAnimationFrame(draw)
+update();
+requestAnimationFrame(draw);
 
 }
 
-draw()
+draw();
 
 </script>
 </body>
