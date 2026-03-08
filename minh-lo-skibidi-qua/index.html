@@ -2,25 +2,38 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Tank Maze v35.0 - Hardcore Space Only</title>
+<title>Tank Maze v36 - Hardcore AI Stable</title>
+
 <style>
 body{margin:0;overflow:hidden;background:#000;font-family:'Segoe UI',sans-serif;}
 canvas{display:block;}
-#ui{position:fixed;top:15px;left:15px;color:#0f0;background:rgba(0,0,0,0.8);padding:12px;border-radius:8px;border:1px solid #0f0;}
+
+#ui{
+position:fixed;
+top:15px;
+left:15px;
+color:#0f0;
+background:rgba(0,0,0,0.8);
+padding:12px;
+border-radius:8px;
+border:1px solid #0f0;
+}
 </style>
 </head>
 
 <body>
 
 <div id="ui">
-<div style="color:#0ff;font-size:11px;margin-bottom:5px;">CORE: v35.0</div>
+<div style="color:#0ff;font-size:11px;margin-bottom:5px;">CORE: v36.0</div>
 <div>TANK HP: <span id="p-hp">5</span></div>
 <div>BOSS HP: <span id="b-hp">7</span></div>
 <div style="font-size:10px;color:#aaa;margin-top:5px;">MOUSE=MOVE | SPACE=FIRE</div>
 </div>
 
-<div id="msg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-color:#fff;font-size:60px;display:none;text-shadow:0 0 20px #0f0;font-weight:bold;"></div>
+<div id="msg"
+style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+color:#fff;font-size:60px;display:none;text-shadow:0 0 20px #0f0;font-weight:bold;">
+</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -52,7 +65,9 @@ maze[r][c]={c,r,walls:[true,true,true,true],v:false};
 }
 
 function genMaze(){
-let curr=maze[0][0],stack=[];
+
+let curr=maze[0][0];
+let stack=[];
 curr.v=true;
 
 while(true){
@@ -61,12 +76,18 @@ let neighbors=[];
 let {c,r}=curr;
 
 [[0,-1,0,2],[1,0,1,3],[0,1,2,0],[-1,0,3,1]].forEach(d=>{
+
 let n=maze[r+d[1]] && maze[r+d[1]][c+d[0]];
-if(n && !n.v) neighbors.push({cell:n,w1:d[2],w2:d[3]});
+
+if(n && !n.v)
+neighbors.push({cell:n,w1:d[2],w2:d[3]});
+
 });
 
 if(neighbors.length){
+
 let next=neighbors[Math.floor(Math.random()*neighbors.length)];
+
 next.cell.v=true;
 stack.push(curr);
 
@@ -74,17 +95,32 @@ curr.walls[next.w1]=false;
 next.cell.walls[next.w2]=false;
 
 curr=next.cell;
-}
-else if(stack.length) curr=stack.pop();
-else break;
+
+}else if(stack.length){
+
+curr=stack.pop();
+
+}else break;
 
 }
+
 }
 
 genMaze();
 
-let player={x:GRID/2,y:GRID/2,a:0,hp:5};
-let boss={x:(COLS-1)*GRID+GRID/2,y:(ROWS-1)*GRID+GRID/2,a:0,hp:7};
+let player={
+x:GRID/2,
+y:GRID/2,
+a:0,
+hp:5
+};
+
+let boss={
+x:(COLS-1)*GRID+GRID/2,
+y:(ROWS-1)*GRID+GRID/2,
+a:0,
+hp:7
+};
 
 let bullets=[];
 let mouse={x:0,y:0,down:false};
@@ -95,27 +131,43 @@ function checkWall(x,y){
 let cx=Math.floor(x/GRID);
 let cy=Math.floor(y/GRID);
 
-if(!maze[cy] || !maze[cy][cx]) return {hit:true};
+if(!maze || !maze[cy] || !maze[cy][cx])
+return {hit:true};
 
 let b=22;
 let rx=x%GRID;
 let ry=y%GRID;
 
-if(maze[cy][cx].walls[0] && ry<b) return {hit:true,axis:'y'};
-if(maze[cy][cx].walls[1] && rx>GRID-b) return {hit:true,axis:'x'};
-if(maze[cy][cx].walls[2] && ry>GRID-b) return {hit:true,axis:'y'};
-if(maze[cy][cx].walls[3] && rx<b) return {hit:true,axis:'x'};
+if(maze[cy][cx].walls[0] && ry<b)
+return {hit:true,axis:'y'};
+
+if(maze[cy][cx].walls[1] && rx>GRID-b)
+return {hit:true,axis:'x'};
+
+if(maze[cy][cx].walls[2] && ry>GRID-b)
+return {hit:true,axis:'y'};
+
+if(maze[cy][cx].walls[3] && rx<b)
+return {hit:true,axis:'x'};
 
 return {hit:false};
+
 }
 
 function findPath(){
 
-let start={c:Math.floor(boss.x/GRID),r:Math.floor(boss.y/GRID)};
-let target={c:Math.floor(player.x/GRID),r:Math.floor(player.y/GRID)};
+let start={
+c:Math.floor(boss.x/GRID),
+r:Math.floor(boss.y/GRID)
+};
 
-if(!maze[start.r] || !maze[start.r][start.c]) return start;
-if(!maze[target.r] || !maze[target.r][target.c]) return start;
+let target={
+c:Math.floor(player.x/GRID),
+r:Math.floor(player.y/GRID)
+};
+
+if(!maze[start.r] || !maze[start.r][start.c])
+return start;
 
 let q=[[start]];
 let visited=new Set([`${start.c},${start.r}`]);
@@ -146,8 +198,10 @@ maze[nr] &&
 maze[nr][nc] &&
 !visited.has(`${nc},${nr}`)
 ){
+
 visited.add(`${nc},${nr}`);
 q.push([...path,{c:nc,r:nr}]);
+
 }
 
 }
@@ -157,9 +211,11 @@ q.push([...path,{c:nc,r:nr}]);
 }
 
 return start;
+
 }
 
 function fire(obj,color,owner){
+
 bullets.push({
 x:obj.x,
 y:obj.y,
@@ -169,6 +225,7 @@ c:color,
 o:owner,
 t:Date.now()
 });
+
 }
 
 window.onmousemove=e=>{
@@ -191,35 +248,27 @@ let next=findPath();
 let targetX=next.c*GRID+GRID/2;
 let targetY=next.r*GRID+GRID/2;
 
-let dx=targetX-boss.x;
-let dy=targetY-boss.y;
+let angle=Math.atan2(targetY-boss.y,targetX-boss.x);
 
-let dist=Math.hypot(dx,dy);
+let moveX=Math.cos(angle)*B_SPEED;
+let moveY=Math.sin(angle)*B_SPEED;
 
-let angle=Math.atan2(dy,dx);
+let nx=boss.x+moveX;
+let ny=boss.y+moveY;
 
-let nx=boss.x+Math.cos(angle)*B_SPEED;
-let ny=boss.y+Math.sin(angle)*B_SPEED;
-
-let w=checkWall(nx,ny);
-
-if(!w.hit){
+if(!checkWall(nx,boss.y).hit)
 boss.x=nx;
+
+if(!checkWall(boss.x,ny).hit)
 boss.y=ny;
-}
 
-let predictX=player.x+(player.x-boss.x)*0.3;
-let predictY=player.y+(player.y-boss.y)*0.3;
+let futureX=player.x+(player.x-boss.x)*0.25;
+let futureY=player.y+(player.y-boss.y)*0.25;
 
-let targetAngle=Math.atan2(predictY-boss.y,predictX-boss.x);
+boss.a+=(Math.atan2(futureY-boss.y,futureX-boss.x)-boss.a)*0.1;
 
-boss.a+=(targetAngle-boss.a)*0.12;
-
-if(dist<GRID*4){
-if(Math.random()<0.06) fire(boss,'#f05','b');
-}else{
-if(Math.random()<0.02) fire(boss,'#f05','b');
-}
+if(Math.random()<0.035)
+fire(boss,'#f05','b');
 
 }
 
@@ -236,8 +285,11 @@ if(mouse.down){
 let nx=player.x+Math.cos(player.a)*P_SPEED;
 let ny=player.y+Math.sin(player.a)*P_SPEED;
 
-if(!checkWall(nx,player.y).hit) player.x=nx;
-if(!checkWall(player.x,ny).hit) player.y=ny;
+if(!checkWall(nx,player.y).hit)
+player.x=nx;
+
+if(!checkWall(player.x,ny).hit)
+player.y=ny;
 
 }
 
@@ -251,26 +303,43 @@ b.y+=b.vy/4;
 let w=checkWall(b.x,b.y);
 
 if(w.hit){
-if(w.axis==='x') b.vx*=-1;
-else b.vy*=-1;
+
+if(w.axis==='x'){
+b.vx*=-1;
+b.x+=b.vx*0.3;
+}
+else{
+b.vy*=-1;
+b.y+=b.vy*0.3;
+}
+
 break;
 }
 
 }
 
 if(Math.hypot(b.x-boss.x,b.y-boss.y)<22 && b.o==='p'){
+
 boss.hp--;
 bullets.splice(i,1);
-if(boss.hp<=0) endGame("WIN!");
+
+if(boss.hp<=0)
+endGame("WIN!");
+
 }
 
 if(Math.hypot(b.x-player.x,b.y-player.y)<22 && b.o==='b'){
+
 player.hp--;
 bullets.splice(i,1);
-if(player.hp<=0) endGame("LOSE!");
+
+if(player.hp<=0)
+endGame("LOSE!");
+
 }
 
-if(Date.now()-b.t>6000) bullets.splice(i,1);
+if(Date.now()-b.t>6000)
+bullets.splice(i,1);
 
 });
 
@@ -280,10 +349,14 @@ bHPText.innerText=boss.hp;
 }
 
 function endGame(s){
+
 gameOver=true;
+
 msg.innerText=s;
 msg.style.display='block';
+
 setTimeout(()=>location.reload(),3000);
+
 }
 
 function draw(){
@@ -313,19 +386,25 @@ ctx.stroke();
 ctx.save();
 ctx.translate(player.x,player.y);
 ctx.rotate(player.a);
+
 ctx.fillStyle='#0f0';
 ctx.fillRect(-18,-18,36,36);
+
 ctx.fillStyle='#fff';
 ctx.fillRect(10,-4,22,8);
+
 ctx.restore();
 
 ctx.save();
 ctx.translate(boss.x,boss.y);
 ctx.rotate(boss.a);
+
 ctx.fillStyle='#f05';
 ctx.fillRect(-22,-22,44,44);
+
 ctx.fillStyle='#fff';
 ctx.fillRect(12,-6,28,12);
+
 ctx.restore();
 
 bullets.forEach(b=>{
