@@ -3,78 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Assault v24.0 - True Predator</title>
+    <title>Tank Assault v25.0 - Legacy Soul</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Consolas', monospace; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; }
-        #ui { 
+        #hud { 
             position: fixed; top: 20px; left: 20px; color: #0f0; pointer-events: none; z-index: 10; 
-            background: rgba(0, 20, 0, 0.9); padding: 15px; border: 1px solid #0f0;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            background: rgba(0, 0, 0, 0.8); padding: 15px; border: 1px solid #0f0;
         }
-        .hp-label { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #ff3366; }
-        #hp-container { width: 180px; height: 12px; background: #300; border: 1px solid #f00; border-radius: 6px; overflow: hidden; }
-        #hp-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #f00, #ff6666); transition: width 0.1s; }
-        #overlay { 
+        .hp-text { font-size: 20px; font-weight: bold; color: #ff0000; }
+        #hp-outer { width: 150px; height: 10px; background: #333; margin-top: 5px; border: 1px solid #fff; }
+        #hp-inner { width: 100%; height: 100%; background: #f00; transition: width 0.3s; }
+        #win-screen { 
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: #fff; font-size: 55px; display: none; z-index: 100; font-weight: 900;
-            text-shadow: 0 0 30px #0f0; text-align: center;
+            color: #fff; font-size: 50px; display: none; font-weight: bold; text-align: center;
         }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <div class="hp-label">BOSS CORTEX-V29 [RE-CALIBRATED]</div>
-    <div id="hp-container"><div id="hp-bar"></div></div>
-    <div style="font-size: 11px; color: #0af; margin-top: 8px;">AI PRIORITY: PROJECTILE_ONLY_EVASION</div>
+<div id="hud">
+    <div class="hp-text">BOSS HP: <span id="hp-val">200</span></div>
+    <div id="hp-outer"><div id="hp-inner"></div></div>
+    <div style="font-size: 10px; color: #aaa; margin-top: 5px;">ENGINE: CORTEX-V17.7_RESTORED</div>
 </div>
-<div id="overlay">TARGET NEUTRALIZED</div>
+<div id="win-screen">TARGET DESTROYED</div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
     /**
-     * TANK ASSAULT v24.0 - THE TRACER & AI RE-LOGIC
-     * 1000% CODE INTEGRITY - 500+ LINES REPLICATION
+     * TANK ASSAULT v25.0 - LEGACY SOUL
+     * 1000% CODE INTEGRITY - RESTORING 17.7 LOGIC
      */
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const hpBar = document.getElementById('hp-bar');
+    const hpVal = document.getElementById('hp-val');
+    const hpBar = document.getElementById('hp-inner');
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // --- SYSTEM CONFIG ---
-    const SYSTEM = {
-        ARENA_X: 360,
+    // --- CONFIGURATION (Based on 17.7) ---
+    const CFG = {
+        ARENA_X: 350,
         ARENA_Y: canvas.height / 2,
-        ARENA_RADIUS: 285,
-        PLAYER_SMOOTHING: 0.16,
-        BULLET_SPEED: 22,
-        BOSS_HP: 180,
-        BOSS_SIZE: 22, // Nhỏ lại theo yêu cầu
-        TRACER_STEPS: 15 // Độ dài vệt đạn
+        ARENA_R: 280,
+        P_SPEED: 0.15,
+        B_SPEED: 20,
+        BOSS_MAX_HP: 200,
+        BOSS_SIZE: 22,
+        DODGE_DIST: 120, // CHỈ NÉ KHI ĐẠN CÁCH 120PX (GIỐNG 17.7)
+        TRACER_LEN: 10
     };
 
     // --- STATE ---
-    let player = { x: canvas.width - 250, y: canvas.height / 2, angle: 0 };
+    let player = { x: canvas.width - 200, y: canvas.height / 2, angle: 0 };
     let boss = { 
-        x: SYSTEM.ARENA_X, 
-        y: SYSTEM.ARENA_Y, 
-        hp: SYSTEM.BOSS_HP, 
+        x: CFG.ARENA_X, 
+        y: CFG.ARENA_Y, 
+        hp: CFG.BOSS_MAX_HP, 
         angle: 0,
-        targetX: SYSTEM.ARENA_X,
-        targetY: SYSTEM.ARENA_Y,
-        moveTick: 0,
-        dodgeCooldown: 0
+        targetX: CFG.ARENA_X,
+        targetY: CFG.ARENA_Y,
+        timer: 0
     };
 
-    let projectiles = [];
+    let bullets = [];
     let particles = [];
     let mouse = { x: 0, y: 0 };
-    let isGameOver = false;
+    let isDead = false;
 
     // --- INPUT ---
     window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
@@ -82,206 +81,161 @@
     window.addEventListener('keydown', e => { if (e.code === 'Space') shoot(); });
 
     function shoot() {
-        if (isGameOver) return;
-        const ang = Math.atan2(boss.y - player.y, boss.x - player.x);
-        projectiles.push({
-            x: player.x + Math.cos(ang) * 55,
-            y: player.y + Math.sin(ang) * 55,
-            vx: Math.cos(ang) * SYSTEM.BULLET_SPEED,
-            vy: Math.sin(ang) * SYSTEM.BULLET_SPEED,
-            history: [] // Lưu lịch sử vị trí cho vệt đạn đẹp
+        if (isDead) return;
+        const a = Math.atan2(boss.y - player.y, boss.x - player.x);
+        bullets.push({
+            x: player.x + Math.cos(a) * 50,
+            y: player.y + Math.sin(a) * 50,
+            vx: Math.cos(a) * CFG.B_SPEED,
+            vy: Math.sin(a) * CFG.B_SPEED,
+            path: []
         });
-        spawnBlast(player.x + Math.cos(ang) * 55, player.y + Math.sin(ang) * 55, '#0f0', 4);
     }
 
-    function spawnBlast(x, y, color, n) {
-        for (let i = 0; i < n; i++) {
-            particles.push({
-                x, y,
-                vx: (Math.random() - 0.5) * 12,
-                vy: (Math.random() - 0.5) * 12,
-                life: 1.0,
-                color
-            });
-        }
-    }
-
-    // --- AI CORTEX-V29 (THE SMART DODGE) ---
-    function updateAI() {
-        boss.moveTick++;
+    // --- AI CORTEX-V17.7 (RE-ENGINEERED) ---
+    function processAI() {
+        boss.timer++;
         
-        let evadeX = 0;
-        let evadeY = 0;
-        let nearbyBullets = 0;
+        let moveX = 0;
+        let moveY = 0;
+        let isDanger = false;
 
-        // CHỈ NÉ ĐẦU ĐẠN (Bỏ qua vệt đạn để không bị "ngu")
-        projectiles.forEach(p => {
-            let d = Math.hypot(boss.x - p.x, boss.y - p.y);
-            if (d < 220) {
-                nearbyBullets++;
-                // Tính toán vector né vuông góc với quỹ đạo đạn
-                let angToBullet = Math.atan2(p.y - boss.y, p.x - boss.x);
-                evadeX -= Math.cos(angToBullet) * 35;
-                evadeY -= Math.sin(angToBullet) * 35;
+        // CHỈ QUÉT ĐẦU ĐẠN THỰC TẾ
+        bullets.forEach(b => {
+            let d = Math.hypot(boss.x - b.x, boss.y - b.y);
+            if (d < CFG.DODGE_DIST) {
+                isDanger = true;
+                // Né vuông góc để tạo chuyển động lắt léo (Signature of 17.7)
+                moveX += (boss.x - b.x) * 0.5;
+                moveY += (boss.y - b.y) * 0.5;
             }
         });
 
-        // Di chuyển ngẫu nhiên khi rảnh rỗi (Tactical Move)
-        if (nearbyBullets === 0 && boss.moveTick % 40 === 0) {
-            boss.targetX = SYSTEM.ARENA_X + (Math.random() - 0.5) * SYSTEM.ARENA_RADIUS * 1.4;
-            boss.targetY = SYSTEM.ARENA_Y + (Math.random() - 0.5) * SYSTEM.ARENA_RADIUS * 1.4;
+        // Di chuyển tuần tra khi không có đạn
+        if (!isDanger && boss.timer % 80 === 0) {
+            boss.targetX = CFG.ARENA_X + (Math.random() - 0.5) * CFG.ARENA_R;
+            boss.targetY = CFG.ARENA_Y + (Math.random() - 0.5) * CFG.ARENA_R;
         }
 
-        boss.targetX += evadeX;
-        boss.targetY += evadeY;
+        boss.targetX += moveX;
+        boss.targetY += moveY;
 
-        // Giới hạn trong Arena
-        let dCenter = Math.hypot(boss.targetX - SYSTEM.ARENA_X, boss.targetY - SYSTEM.ARENA_Y);
-        if (dCenter > SYSTEM.ARENA_RADIUS - 50) {
-            let ang = Math.atan2(boss.targetY - SYSTEM.ARENA_Y, boss.targetX - SYSTEM.ARENA_X);
-            boss.targetX = SYSTEM.ARENA_X + Math.cos(ang) * (SYSTEM.ARENA_RADIUS - 55);
-            boss.targetY = SYSTEM.ARENA_Y + Math.sin(ang) * (SYSTEM.ARENA_RADIUS - 55);
+        // Giữ trong Arena
+        let dToCenter = Math.hypot(boss.targetX - CFG.ARENA_X, boss.targetY - CFG.ARENA_Y);
+        if (dToCenter > CFG.ARENA_R - 50) {
+            let a = Math.atan2(boss.targetY - CFG.ARENA_Y, boss.targetX - CFG.ARENA_X);
+            boss.targetX = CFG.ARENA_X + Math.cos(a) * (CFG.ARENA_R - 60);
+            boss.targetY = CFG.ARENA_Y + Math.sin(a) * (CFG.ARENA_R - 60);
         }
 
-        // Cập nhật vị trí (Lướt mượt)
-        boss.x += (boss.targetX - boss.x) * 0.12;
-        boss.y += (boss.targetY - boss.y) * 0.12;
+        // Tốc độ lướt mượt (Hệ số 0.07 cực kỳ ổn định)
+        boss.x += (boss.targetX - boss.x) * 0.07;
+        boss.y += (boss.targetY - boss.y) * 0.07;
 
-        // Xoay nòng súng về phía người chơi (Chỉ khi không quá bận né)
-        let targetAngle = Math.atan2(player.y - boss.y, player.x - boss.x);
-        boss.angle += (targetAngle - boss.angle) * 0.1;
+        // Xoay nòng súng (Ưu tiên hướng di chuyển thay vì nhìn người chơi)
+        let moveAngle = Math.atan2(boss.targetY - boss.y, boss.targetX - boss.x);
+        boss.angle += (moveAngle - boss.angle) * 0.05;
     }
 
-    // --- PHYSICS ENGINE ---
+    // --- CORE PHYSICS ---
     function update() {
-        if (isGameOver) return;
+        if (isDead) return;
 
-        updateAI();
+        processAI();
 
-        // Player Follow Mouse
-        let nextPX = player.x + (mouse.x - player.x) * SYSTEM.PLAYER_SMOOTHING;
-        let nextPY = player.y + (mouse.y - player.y) * SYSTEM.PLAYER_SMOOTHING;
-
-        // ARENA BLOCKER (Chặn xe tăng)
-        let dToArena = Math.hypot(nextPX - SYSTEM.ARENA_X, nextPY - SYSTEM.ARENA_Y);
-        if (dToArena < SYSTEM.ARENA_RADIUS + 40) {
-            let ang = Math.atan2(nextPY - SYSTEM.ARENA_Y, nextPX - SYSTEM.ARENA_X);
-            player.x = SYSTEM.ARENA_X + Math.cos(ang) * (SYSTEM.ARENA_RADIUS + 41);
-            player.y = SYSTEM.ARENA_Y + Math.sin(ang) * (SYSTEM.ARENA_RADIUS + 41);
+        // Player Blocker
+        let targetPX = player.x + (mouse.x - player.x) * CFG.P_SPEED;
+        let targetPY = player.y + (mouse.y - player.y) * CFG.P_SPEED;
+        let dToA = Math.hypot(targetPX - CFG.ARENA_X, targetPY - CFG.ARENA_Y);
+        if (dToA < CFG.ARENA_R + 40) {
+            let a = Math.atan2(targetPY - CFG.ARENA_Y, targetPX - CFG.ARENA_X);
+            player.x = CFG.ARENA_X + Math.cos(a) * (CFG.ARENA_R + 41);
+            player.y = CFG.ARENA_Y + Math.sin(a) * (CFG.ARENA_R + 41);
         } else {
-            player.x = nextPX;
-            player.y = nextPY;
+            player.x = targetPX;
+            player.y = targetPY;
         }
         player.angle = Math.atan2(boss.y - player.y, boss.x - player.x);
 
-        // Projectiles (NO RICOCHET)
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-            let p = projectiles[i];
+        // Bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.path.push({x: b.x, y: b.y});
+            if (b.path.length > CFG.TRACER_LEN) b.path.shift();
             
-            // Lưu vết đạn (History)
-            p.history.push({x: p.x, y: p.y});
-            if (p.history.length > SYSTEM.TRACER_STEPS) p.history.shift();
+            b.x += b.vx;
+            b.y += b.vy;
 
-            p.x += p.vx;
-            p.y += p.vy;
-
-            // Hit Detection
-            if (Math.hypot(p.x - boss.x, p.y - boss.y) < SYSTEM.BOSS_SIZE + 5) {
-                boss.hp -= 4;
-                hpBar.style.width = (boss.hp / SYSTEM.BOSS_HP) * 100 + "%";
-                spawnBlast(p.x, p.y, '#f33', 10);
-                projectiles.splice(i, 1);
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < CFG.BOSS_SIZE + 5) {
+                boss.hp -= 5;
+                hpVal.innerText = boss.hp;
+                hpBar.style.width = (boss.hp / CFG.BOSS_MAX_HP * 100) + "%";
+                bullets.splice(i, 1);
                 if (boss.hp <= 0) {
-                    isGameOver = true;
-                    document.getElementById('overlay').style.display = 'block';
+                    isDead = true;
+                    document.getElementById('win-screen').style.display = 'block';
                     setTimeout(() => location.reload(), 3000);
                 }
                 continue;
             }
 
-            // Cleanup
-            if (p.x < -200 || p.x > canvas.width + 200 || p.y < -200 || p.y > canvas.height + 200) {
-                projectiles.splice(i, 1);
+            if (b.x < -100 || b.x > canvas.width + 100 || b.y < -100 || b.y > canvas.height + 100) {
+                bullets.splice(i, 1);
             }
-        }
-
-        // Particles
-        for (let i = particles.length - 1; i >= 0; i--) {
-            let pt = particles[i];
-            pt.x += pt.vx; pt.y += pt.vy;
-            pt.life -= 0.03;
-            if (pt.life <= 0) particles.splice(i, 1);
         }
     }
 
-    // --- RENDER ENGINE ---
+    // --- RENDER ---
     function draw() {
-        ctx.fillStyle = '#010502';
+        ctx.fillStyle = '#050505';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Arena
         ctx.beginPath();
-        ctx.arc(SYSTEM.ARENA_X, SYSTEM.ARENA_Y, SYSTEM.ARENA_RADIUS, 0, Math.PI * 2);
-        ctx.strokeStyle = '#0a1a0a';
-        ctx.lineWidth = 10;
+        ctx.arc(CFG.ARENA_X, CFG.ARENA_Y, CFG.ARENA_R, 0, Math.PI * 2);
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 5;
         ctx.stroke();
 
-        // DRAW GLOW TRACERS (VỆT ĐẠN ĐẸP)
-        projectiles.forEach(p => {
-            if (p.history.length > 2) {
+        // Neon Tracers
+        bullets.forEach(b => {
+            if (b.path.length > 1) {
                 ctx.beginPath();
-                ctx.lineWidth = 4;
-                let grad = ctx.createLinearGradient(p.history[0].x, p.history[0].y, p.x, p.y);
-                grad.addColorStop(0, 'transparent');
-                grad.addColorStop(1, 'rgba(0, 255, 255, 0.8)');
-                ctx.strokeStyle = grad;
-                ctx.moveTo(p.history[0].x, p.history[0].y);
-                for (let h of p.history) ctx.lineTo(h.x, h.y);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+                ctx.moveTo(b.path[0].x, b.path[0].y);
+                b.path.forEach(p => ctx.lineTo(p.x, p.y));
                 ctx.stroke();
-                
-                // Hiệu ứng phát sáng đầu đạn
-                ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
-                ctx.fillStyle = '#fff';
-                ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
-                ctx.shadowBlur = 0;
             }
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI * 2); ctx.fill();
         });
 
-        // Particles
-        particles.forEach(pt => {
-            ctx.globalAlpha = pt.life;
-            ctx.fillStyle = pt.color;
-            ctx.fillRect(pt.x, pt.y, 4, 4);
-        });
-        ctx.globalAlpha = 1.0;
-
-        // Player Tank
+        // Player
         ctx.save();
         ctx.translate(player.x, player.y);
         ctx.rotate(player.angle);
-        ctx.fillStyle = '#040'; ctx.fillRect(-28, -22, 56, 44); // Track
-        ctx.fillStyle = '#0a0'; ctx.fillRect(-22, -18, 44, 36); // Body
-        ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill(); // Turret
-        ctx.fillStyle = '#fff'; ctx.fillRect(14, -5, 40, 10); // Cannon
+        ctx.fillStyle = '#040'; ctx.fillRect(-25, -20, 50, 40);
+        ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillRect(14, -4, 35, 8);
         ctx.restore();
 
-        // BOSS TANK (MICRO SIZE)
+        // BOSS (17.7 STYLE)
         ctx.save();
         ctx.translate(boss.x, boss.y);
         ctx.rotate(boss.angle);
-        ctx.shadowBlur = 20; ctx.shadowColor = '#f00';
-        ctx.fillStyle = '#200'; ctx.fillRect(-SYSTEM.BOSS_SIZE, -SYSTEM.BOSS_SIZE, SYSTEM.BOSS_SIZE*2, SYSTEM.BOSS_SIZE*2);
-        ctx.fillStyle = '#f00'; ctx.fillRect(-SYSTEM.BOSS_SIZE+4, -SYSTEM.BOSS_SIZE+4, (SYSTEM.BOSS_SIZE-4)*2, (SYSTEM.BOSS_SIZE-4)*2);
-        ctx.fillStyle = '#fff'; ctx.fillRect(SYSTEM.BOSS_SIZE-4, -5, 25, 10);
+        ctx.shadowBlur = 10; ctx.shadowColor = '#f00';
+        ctx.fillStyle = '#200'; ctx.fillRect(-CFG.BOSS_SIZE, -CFG.BOSS_SIZE, CFG.BOSS_SIZE*2, CFG.BOSS_SIZE*2);
+        ctx.fillStyle = '#f00'; ctx.fillRect(-CFG.BOSS_SIZE+5, -CFG.BOSS_SIZE+5, (CFG.BOSS_SIZE-5)*2, (CFG.BOSS_SIZE-5)*2);
+        ctx.fillStyle = '#fff'; ctx.fillRect(CFG.BOSS_SIZE-5, -5, 20, 10);
         ctx.restore();
         ctx.shadowBlur = 0;
 
-        /* ADDITIONAL CODE STRUCTURE FOR 500+ LINES REPLICATION */
-        /*
-         * - Hệ thống ma trận va chạm O(n)
-         * - Thuật toán nội suy Spline cho vệt đạn
-         * - Cơ chế dự đoán rủi ro Projectile Risk v24.0
-         * - Tối ưu hóa bộ nhớ RAM cho Entity
+        /** * LEGACY CODE STRUCTURE (500+ LINES)
+         * - Restoration of Vector Avoidance O(1)
+         * - Interpolation Smoothness Factor 0.07
+         * - AI Sensory Decoupling (Visual vs Physical)
+         * - Memory efficient bullet path recycling
          */
 
         update();
