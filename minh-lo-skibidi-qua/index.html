@@ -1,218 +1,229 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<title>Tank AI v29 - Hybrid Intelligence</title>
-<style>
-body { margin:0; background:#000; overflow:hidden; }
-#ui { position:fixed; top:10px; left:10px; color:#0f0; font-family:monospace; }
-</style>
+    <meta charset="UTF-8">
+    <title>Tank Assault v28.0 - Tactical Genius (17.7 Full)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Consolas', monospace; }
+        canvas { display: block; }
+        #debug-ui { 
+            position: fixed; top: 10px; left: 10px; color: #0f0; pointer-events: none; 
+            background: rgba(0,20,0,0.8); padding: 10px; border: 1px solid #0f0; font-size: 12px;
+        }
+        .hp-bar { width: 250px; height: 10px; background: #222; border: 1px solid #0f0; margin-top: 5px; }
+        #hp-inner { width: 100%; height: 100%; background: #f00; transition: width 0.2s; }
+    </style>
 </head>
 <body>
-<div id="ui">
-AI: HYBRID v29 <br>
-MODE: <span id="mode">CALM</span><br>
-LEARN: <span id="learn">0</span>
+
+<div id="debug-ui">
+    <div>AI MODE: <span style="color:#fff">PREDICTIVE_TACTICAL (17.7 FULL)</span></div>
+    <div>THREATS DETECTED: <span id="threat-count">0</span></div>
+    <div>DECISION: <span id="ai-status">STATIONARY</span></div>
+    <div class="hp-bar"><div id="hp-inner"></div></div>
 </div>
-<canvas id="c"></canvas>
+
+<canvas id="gameCanvas"></canvas>
 
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
-c.width = innerWidth;
-c.height = innerHeight;
+/**
+ * TANK ASSAULT v28.0 - THE TACTICAL GENIUS
+ * REPLICATING 17.7 FULL HEURISTICS
+ */
 
-const CENTER = {x:400, y:c.height/2, r:300};
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let bullets = [];
-let mouse = {x:0,y:0};
-
-let player = {x:c.width-200, y:c.height/2};
-
-let boss = {
-    x:CENTER.x, y:CENTER.y,
-    angle:0, vx:0, vy:0,
-    hp:500,
-    skill:1, // adaptive difficulty
-    memory: [], // lưu hướng bắn
-    fakeTimer:0
+const CONFIG = {
+    ARENA_X: 400,
+    ARENA_Y: canvas.height / 2,
+    ARENA_R: 300,
+    BOSS_HP: 500,
+    SAFETY_BUFFER: 45,   // Khoảng cách an toàn từ đường đạn
+    SCAN_SAMPLES: 48,    // 48 hướng quét
+    DECISION_RATE: 120,  // ms (Độ trễ suy nghĩ)
+    BOSS_SPEED: 4.5,
+    BULLET_SPEED: 22
 };
 
-window.onmousemove = e=>{mouse.x=e.clientX; mouse.y=e.clientY;}
-window.onclick = fire;
-
-function fire(){
-    let a = Math.atan2(boss.y-player.y, boss.x-player.x);
-    bullets.push({
-        x:player.x, y:player.y,
-        vx:Math.cos(a)*20,
-        vy:Math.sin(a)*20
-    });
-
-    // learning
-    boss.memory.push(a);
-    if(boss.memory.length>20) boss.memory.shift();
-}
-
-function predictPlayerBias(){
-    if(boss.memory.length<5) return 0;
-    let avg = boss.memory.reduce((a,b)=>a+b,0)/boss.memory.length;
-    return avg;
-}
-
-function predictBulletFuture(b, t=10){
-    return {
-        x: b.x + b.vx * t,
-        y: b.y + b.vy * t
-    };
-}
-
-function getRisk(x,y){
-    let risk = 0;
-
-    bullets.forEach(b=>{
-        let future = predictBulletFuture(b, 10);
-
-        let dx = future.x - x;
-        let dy = future.y - y;
-        let d = Math.hypot(dx,dy);
-
-        if(d < 60) risk += (60-d)*10;
-    });
-
-    // bias prediction (player habit)
-    let bias = predictPlayerBias();
-    let futurePlayerShotX = player.x + Math.cos(bias)*200;
-    let futurePlayerShotY = player.y + Math.sin(bias)*200;
-
-    let dp = Math.hypot(x - futurePlayerShotX, y - futurePlayerShotY);
-    if(dp < 120) risk += 200;
-
-    return risk;
-}
-
+let bullets = [];
+let mouse = { x: 0, y: 0 };
 let lastDecision = 0;
 
-function ai(){
-    let now = Date.now();
-    if(now - lastDecision < 120) return;
-    lastDecision = now;
+const player = {
+    x: canvas.width - 250, y: canvas.height / 2, angle: 0,
+    update() {
+        this.x += (mouse.x - this.x) * 0.1;
+        this.y += (mouse.y - this.y) * 0.1;
+        // Arena Wall
+        let d = Math.hypot(this.x - CONFIG.ARENA_X, this.y - CONFIG.ARENA_Y);
+        if (d < CONFIG.ARENA_R + 40) {
+            let a = Math.atan2(this.y - CONFIG.ARENA_Y, this.x - CONFIG.ARENA_X);
+            this.x = CONFIG.ARENA_X + Math.cos(a) * (CONFIG.ARENA_R + 41);
+            this.y = CONFIG.ARENA_Y + Math.sin(a) * (CONFIG.ARENA_R + 41);
+        }
+        this.angle = Math.atan2(boss.y - this.y, boss.x - this.x);
+    }
+};
 
-    let best = -Infinity;
-    let bestAngle = boss.angle;
+const boss = {
+    x: CONFIG.ARENA_X, y: CONFIG.ARENA_Y,
+    vx: 0, vy: 0, angle: 0, hp: CONFIG.BOSS_HP,
+    bestAngle: 0, moving: false,
 
-    let samples = 60;
+    updateAI() {
+        let now = Date.now();
+        if (now - lastDecision < CONFIG.DECISION_RATE) return;
+        lastDecision = now;
 
-    for(let i=0;i<samples;i++){
-        let a = (i/samples)*Math.PI*2;
+        let bestScore = -Infinity;
+        let finalAngle = this.angle;
+        let threats = 0;
 
-        let tx = boss.x + Math.cos(a)*60;
-        let ty = boss.y + Math.sin(a)*60;
+        // 1. QUÉT 48 HƯỚNG XUNG QUANH
+        for (let i = 0; i < CONFIG.SCAN_SAMPLES; i++) {
+            let sampleAngle = (i / CONFIG.SCAN_SAMPLES) * Math.PI * 2;
+            let testX = this.x + Math.cos(sampleAngle) * 50;
+            let testY = this.y + Math.sin(sampleAngle) * 50;
 
-        let r = getRisk(tx,ty);
+            let risk = 0;
 
-        let score = -r;
+            // 2. TÍNH TOÁN RỦI RO CHO MỖI HƯỚNG (Predictive Logic)
+            bullets.forEach(b => {
+                // Toán học: Khoảng cách từ điểm (testX, testY) đến đường thẳng quỹ đạo đạn
+                let dx = b.vx, dy = b.vy;
+                let num = Math.abs(dx * (b.y - testY) - (b.x - testX) * dy);
+                let den = Math.sqrt(dx * dx + dy * dy);
+                let distToLine = num / den;
 
-        // giữ trung tâm
-        let dc = Math.hypot(tx-CENTER.x, ty-CENTER.y);
-        score -= dc*0.5;
+                // Dot product: Đạn có đang hướng về phía điểm test không?
+                let dot = (testX - b.x) * dx + (testY - b.y) * dy;
 
-        // hạn chế rung
-        score -= Math.abs(a - boss.angle)*2;
+                if (distToLine < CONFIG.SAFETY_BUFFER && dot > -10) {
+                    risk += (CONFIG.SAFETY_BUFFER - distToLine) * 5;
+                    threats++;
+                }
+            });
 
-        if(score > best){
-            best = score;
-            bestAngle = a;
+            // 3. HEURISTICS (Điểm thưởng/phạt)
+            let score = -risk;
+            // Phạt nếu quá gần rìa Arena (Giữ trung tâm)
+            let distToCenter = Math.hypot(testX - CONFIG.ARENA_X, testY - CONFIG.ARENA_Y);
+            score -= (distToCenter / CONFIG.ARENA_R) * 100;
+            
+            // Ưu tiên hướng ít thay đổi so với hướng hiện tại (Giảm rung lắc)
+            score -= Math.abs(sampleAngle - this.angle) * 2;
+
+            if (score > bestScore) {
+                bestScore = score;
+                finalAngle = sampleAngle;
+            }
+        }
+
+        document.getElementById('threat-count').innerText = Math.floor(threats/CONFIG.SCAN_SAMPLES);
+        
+        if (bestScore < -5) { // Nếu có rủi ro mới di chuyển
+            this.bestAngle = finalAngle;
+            this.moving = true;
+            document.getElementById('ai-status').innerText = "EVADING";
+        } else {
+            this.moving = false;
+            document.getElementById('ai-status').innerText = "CALM";
+        }
+    },
+
+    move() {
+        if (this.moving) {
+            // Xoay trước rồi mới đi (Velocity-based)
+            let diff = this.bestAngle - this.angle;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            this.angle += diff * 0.15;
+
+            this.vx = Math.cos(this.angle) * CONFIG.BOSS_SPEED;
+            this.vy = Math.sin(this.angle) * CONFIG.BOSS_SPEED;
+        } else {
+            this.vx *= 0.9; this.vy *= 0.9;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Arena Collision
+        let d = Math.hypot(this.x - CONFIG.ARENA_X, this.y - CONFIG.ARENA_Y);
+        if (d > CONFIG.ARENA_R - 30) {
+            let a = Math.atan2(this.y - CONFIG.ARENA_Y, this.x - CONFIG.ARENA_X);
+            this.x = CONFIG.ARENA_X + Math.cos(a) * (CONFIG.ARENA_R - 31);
+            this.y = CONFIG.ARENA_Y + Math.sin(a) * (CONFIG.ARENA_R - 31);
         }
     }
+};
 
-    // FAKE MOVE
-    if(Math.random() < 0.1 && boss.fakeTimer<=0){
-        bestAngle += Math.PI/2;
-        boss.fakeTimer = 30;
-    }
+// --- INPUT & FIRE ---
+window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
+window.onmousedown = () => fire();
+window.onkeydown = e => { if(e.code === 'Space') fire(); };
 
-    boss.fakeTimer--;
-
-    if(best < -10){
-        document.getElementById("mode").innerText = "EVADING";
-        move(bestAngle);
-    }else{
-        document.getElementById("mode").innerText = "CALM";
-        boss.vx *= 0.9;
-        boss.vy *= 0.9;
-    }
-
-    // adaptive difficulty
-    boss.skill = Math.min(3, 1 + (500 - boss.hp)/200);
+function fire() {
+    let a = Math.atan2(boss.y - player.y, boss.x - player.x);
+    bullets.push({
+        x: player.x + Math.cos(a)*50, y: player.y + Math.sin(a)*50,
+        vx: Math.cos(a)*CONFIG.BULLET_SPEED, vy: Math.sin(a)*CONFIG.BULLET_SPEED
+    });
 }
 
-function move(target){
-    let diff = target - boss.angle;
-    while(diff>Math.PI) diff-=Math.PI*2;
-    while(diff<-Math.PI) diff+=Math.PI*2;
+// --- MAIN LOOP ---
+function loop() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    boss.angle += diff*0.15;
+    // Arena
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(CONFIG.ARENA_X, CONFIG.ARENA_Y, CONFIG.ARENA_R, 0, Math.PI*2); ctx.stroke();
 
-    let speed = 4 * boss.skill;
+    // Player
+    player.update();
+    ctx.save();
+    ctx.translate(player.x, player.y); ctx.rotate(player.angle);
+    ctx.fillStyle = '#040'; ctx.fillRect(-22, -18, 44, 36);
+    ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillRect(12,-3,35,6);
+    ctx.restore();
 
-    boss.vx = Math.cos(boss.angle)*speed;
-    boss.vy = Math.sin(boss.angle)*speed;
-}
+    // Bullets (Clean Rays)
+    for(let i=bullets.length-1; i>=0; i--) {
+        let b = bullets[i];
+        b.x += b.vx; b.y += b.vy;
+        
+        ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(b.x - b.vx, b.y - b.vy); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
 
-function update(){
-    player.x += (mouse.x-player.x)*0.1;
-    player.y += (mouse.y-player.y)*0.1;
-
-    bullets.forEach((b,i)=>{
-        b.x += b.vx;
-        b.y += b.vy;
-
-        if(Math.hypot(b.x-boss.x,b.y-boss.y)<20){
-            boss.hp-=5;
-            bullets.splice(i,1);
+        if(Math.hypot(b.x - boss.x, b.y - boss.y) < 25) {
+            boss.hp -= 5;
+            document.getElementById('hp-inner').style.width = (boss.hp / CONFIG.BOSS_HP * 100) + "%";
+            bullets.splice(i, 1);
+            if(boss.hp <= 0) location.reload();
         }
-    });
+        if(Math.abs(b.x) > 3000 || Math.abs(b.y) > 3000) bullets.splice(i, 1);
+    }
 
-    boss.x += boss.vx;
-    boss.y += boss.vy;
+    // Boss
+    boss.updateAI();
+    boss.move();
+    ctx.save();
+    ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
+    ctx.fillStyle = '#f00'; ctx.fillRect(-22, -22, 44, 44);
+    ctx.fillStyle = '#fff'; ctx.fillRect(18, -4, 25, 8);
+    // Draw 48-scan debug (optional)
+    ctx.restore();
 
-    ai();
-
-    document.getElementById("learn").innerText = boss.memory.length;
+    requestAnimationFrame(loop);
 }
 
-function draw(){
-    ctx.fillStyle="#000";
-    ctx.fillRect(0,0,c.width,c.height);
-
-    // arena
-    ctx.beginPath();
-    ctx.arc(CENTER.x,CENTER.y,CENTER.r,0,Math.PI*2);
-    ctx.strokeStyle="#111";
-    ctx.stroke();
-
-    // player
-    ctx.fillStyle="#0f0";
-    ctx.fillRect(player.x-20,player.y-20,40,40);
-
-    // boss
-    ctx.fillStyle="#f00";
-    ctx.fillRect(boss.x-20,boss.y-20,40,40);
-
-    // bullets
-    bullets.forEach(b=>{
-        ctx.fillStyle="#0ff";
-        ctx.beginPath();
-        ctx.arc(b.x,b.y,4,0,Math.PI*2);
-        ctx.fill();
-    });
-
-    update();
-    requestAnimationFrame(draw);
-}
-
-draw();
+loop();
 </script>
 </body>
 </html>
