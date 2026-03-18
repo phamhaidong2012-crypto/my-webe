@@ -2,359 +2,445 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Tank Maze v34.0 - 800 Lines Sniper Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Boss AI v17.7 - Tactical Tracking Laser FULL</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #010101; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background: #020202; touch-action: none; font-family: sans-serif; }
         canvas { display: block; }
-        #ui { 
-            position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; 
-            background: rgba(0, 20, 0, 0.8); padding: 15px; border-radius: 4px; border: 1px solid #0f0;
+        #ui { position: fixed; top: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
+        .stat { font-size: 20px; font-weight: bold; text-shadow: 0 0 5px #000; margin-bottom: 5px; }
+        #player-ui { position: fixed; bottom: 15px; left: 15px; color: #0f0; pointer-events: none; z-index: 10; }
+        #shield-ui { 
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); 
+            text-align: center; color: #0cf; font-weight: 900; display: none;
         }
-        #msg { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: #fff; font-size: 70px; display: none; z-index: 100; font-weight: 900;
+        #laser-ui {
+            position: fixed; bottom: 15px; right: 15px; color: #f00; font-weight: bold; text-align: right;
         }
-        .stat { font-size: 16px; margin: 4px 0; }
+        .warning { color: #ff3333; font-size: 24px; animation: blink 0.2s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="stat">>>> UNIT: BOSS_SNIPER_V34</div>
-    <div class="stat">>>> STATUS: <span id="ai-mode" style="color: #ff0;">KITING</span></div>
-    <div class="stat">PLAYER HP: <span style="color:#0f0">IMMORTAL</span></div>
-    <div class="stat">BOSS HP: <span id="b-hp" style="color:#f05">50</span></div>
+    <div class="stat">BOSS HP: <span id="hp">3</span></div>
+    <div style="font-size: 10px;">CORE: CORTEX-V29 | MULTI-TASKING: ACTIVE</div>
 </div>
-<div id="msg"></div>
+
+<div id="shield-ui">
+    <div class="warning">WARNING: 12 DAMAGE DETECTED!</div>
+    <div style="font-size: 30px;">SHIELD: <span id="shield-count">0</span>/12</div>
+    <div style="font-size: 12px;">NHẤN [N] LIÊN TỤC ĐỂ ĐỠ!</div>
+</div>
+
+<div id="player-ui">
+    <div class="stat">TOWER HP: <span id="p-hp">3</span></div>
+    <div style="font-size: 10px;">BOSS ATTACK IN: <span id="timer-txt">30</span>s</div>
+</div>
+
+<div id="laser-ui">
+    <div id="laser-status" style="font-size: 18px;">LASER: LOCKED</div>
+    <div style="font-size: 12px;">AMMO: <span id="laser-ammo">0</span> (Phím 1)</div>
+</div>
 
 <canvas id="gameCanvas"></canvas>
 
 <script>
-    /**
-     * TANK MAZE ULTIMATE v34.0 - 800 LINE PROFESSIONAL ARCHITECTURE
-     * AI: TACTICAL SNIPER & PERSISTENT TRAJECTORY ENGINE
-     */
-
-    // --- 1. CORE ENGINE CONFIGURATION ---
+    // --- KHỞI TẠO HỆ THỐNG ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth; 
+    const hpTxt = document.getElementById('hp');
+    const pHpTxt = document.getElementById('p-hp');
+    const timerTxt = document.getElementById('timer-txt');
+    const shieldUi = document.getElementById('shield-ui');
+    const shieldCountTxt = document.getElementById('shield-count');
+    const laserStatus = document.getElementById('laser-status');
+    const laserAmmoTxt = document.getElementById('laser-ammo');
+
+    canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const GLOBAL_SETTINGS = {
-        CELL_SIZE: 100,
-        BULLET_SPEED: 12,
-        PLAYER_SPEED: 5.5,
-        BOSS_MAX_SPEED: 4.5,
-        OPTIMAL_DISTANCE: 400,
-        BOUNCE_LIMIT: 4,
-        TRAJECTORY_WIDTH: 14,
-        BOSS_HP: 50
-    };
+    const ARENA_RADIUS = 225;
+    const ARENA_X = canvas.width / 2;
+    const ARENA_Y = canvas.height / 2;
+    const BOSS_REAL_HITBOX = 5; 
+    const SAFETY_BUFFER = 55;
+    const TOWER = { x: canvas.width / 2, y: canvas.height - 60, size: 50 };
 
-    const COLS = Math.floor(canvas.width / GLOBAL_SETTINGS.CELL_SIZE);
-    const ROWS = Math.floor(canvas.height / GLOBAL_SETTINGS.CELL_SIZE);
-    
-    // --- 2. MAZE GENERATION OBJECT ---
-    class MazeGenerator {
-        constructor() {
-            this.grid = [];
-            this.init();
-        }
-        init() {
-            for (let r = 0; r < ROWS; r++) {
-                this.grid[r] = [];
-                for (let c = 0; c < COLS; c++) {
-                    this.grid[r][c] = { c, r, walls: [true, true, true, true], visited: false };
-                }
-            }
-        }
-        generate() {
-            let current = this.grid[0][0];
-            current.visited = true;
-            let stack = [];
-            while (true) {
-                let neighbors = this.getNeighbors(current);
-                if (neighbors.length > 0) {
-                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    next.cell.visited = true;
-                    stack.push(current);
-                    this.removeWalls(current, next.cell, next.dir);
-                    current = next.cell;
-                } else if (stack.length > 0) {
-                    current = stack.pop();
-                } else break;
-            }
-        }
-        getNeighbors(cell) {
-            let neighbors = [];
-            let {c, r} = cell;
-            let dirs = [{dc:0, dr:-1, w:0, rw:2}, {dc:1, dr:0, w:1, rw:3}, {dc:0, dr:1, w:2, rw:0}, {dc:-1, dr:0, w:3, rw:1}];
-            dirs.forEach(d => {
-                let n = this.grid[r+d.dr] && this.grid[r+d.dr][c+d.dc];
-                if (n && !n.visited) neighbors.push({cell: n, dir: d});
+    let boss = { x: ARENA_X, y: ARENA_Y, angle: 0, hp: 3, targetX: ARENA_X, targetY: ARENA_Y };
+    let playerHp = 3;
+    let bullets = [];      
+    let bossBullets = [];  
+    let mouseX = 0, mouseY = 0;
+    let gameTime = 0;
+    let lastDecisionTime = 0;
+
+    // --- LOGIC KHIÊN N ---
+    let shieldCount = 0;
+    let isGathering = false;
+    let gatherRadius = 0;
+    let nPressed = false;
+
+    // --- LOGIC LASER ---
+    let laserAmmo = 0;
+    let laserCharge = 0; // 0: Khóa, 1: Sẵn sàng, 2: Đang nạp, 3: Đang bắn
+    let laserTimer = 0;
+    let laserParticles = []; 
+    let laserTargetAngle = 0; 
+
+    // --- VÒNG LẶP THỜI GIAN ---
+    setInterval(() => {
+        gameTime++;
+        let countdown = 30 - (gameTime % 30);
+        timerTxt.innerText = countdown;
+        if (countdown === 3) startGathering();
+        if (gameTime > 0 && gameTime % 30 === 0) bossShoot();
+    }, 1000);
+
+    function startGathering() {
+        isGathering = true;
+        gatherRadius = 150;
+        shieldCount = 0;
+        shieldCountTxt.innerText = "0";
+        shieldUi.style.display = "block";
+    }
+
+    function bossShoot() {
+        isGathering = false;
+        shieldUi.style.display = "none";
+        const isBlocked = shieldCount >= 12;
+        const angle = Math.atan2(TOWER.y - boss.y, TOWER.x - boss.x);
+        bossBullets.push({
+            x: boss.x,
+            y: boss.y,
+            vx: Math.cos(angle) * 8,
+            vy: Math.sin(angle) * 8,
+            blocked: isBlocked
+        });
+    }
+
+    function createLaserParticles() {
+        for (let i = 0; i < 35; i++) {
+            let ang = Math.random() * Math.PI * 2;
+            let dist = 120 + Math.random() * 60;
+            laserParticles.push({
+                x: TOWER.x + Math.cos(ang) * dist,
+                y: TOWER.y + Math.sin(ang) * dist,
+                speed: 2.5 + Math.random() * 2,
+                life: 60 
             });
-            return neighbors;
-        }
-        removeWalls(c1, c2, d) {
-            c1.walls[d.w] = false;
-            c2.walls[d.rw] = false;
         }
     }
 
-    const mazeManager = new MazeGenerator();
-    mazeManager.generate();
-    const maze = mazeManager.grid;
-
-    // --- 3. PHYSICS & COLLISION SYSTEM ---
-    class PhysicsEngine {
-        static checkWall(x, y, radius) {
-            for (let i = 0; i < 16; i++) {
-                let angle = (i / 16) * Math.PI * 2;
-                let px = x + Math.cos(angle) * radius;
-                let py = y + Math.sin(angle) * radius;
-                let c = Math.floor(px / GLOBAL_SETTINGS.CELL_SIZE);
-                let r = Math.floor(py / GLOBAL_SETTINGS.CELL_SIZE);
-                if (!maze[r] || !maze[r][c]) return true;
-                let lx = px % GLOBAL_SETTINGS.CELL_SIZE;
-                let ly = py % GLOBAL_SETTINGS.CELL_SIZE;
-                let b = 5;
-                if (maze[r][c].walls[0] && ly < b) return true;
-                if (maze[r][c].walls[1] && lx > GLOBAL_SETTINGS.CELL_SIZE - b) return true;
-                if (maze[r][c].walls[2] && ly > GLOBAL_SETTINGS.CELL_SIZE - b) return true;
-                if (maze[r][c].walls[3] && lx < b) return true;
+    // --- XỬ LÝ ĐIỀU KHIỂN ---
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            fireBullet();
+        }
+        if (e.code === 'KeyN' && !nPressed && isGathering) {
+            nPressed = true;
+            shieldCount++;
+            shieldCountTxt.innerText = shieldCount;
+        }
+        if (e.code === 'Digit1' && laserAmmo > 0 && laserCharge <= 1) {
+            laserAmmo--;
+            laserAmmoTxt.innerText = laserAmmo;
+            laserCharge = 2; 
+            laserTimer = 60; 
+            laserTargetAngle = Math.atan2(boss.y - TOWER.y, boss.x - TOWER.x);
+            createLaserParticles();
+            if (laserAmmo === 0) {
+                laserStatus.innerText = "LOCKED";
+                laserStatus.style.color = "#f00";
             }
-            return false;
         }
-    }
+    });
 
-    // --- 4. PATHFINDING SYSTEM (BFS) ---
-    class Pathfinder {
-        static getPath(start, target) {
-            let sCell = {c: Math.floor(start.x/GLOBAL_SETTINGS.CELL_SIZE), r: Math.floor(start.y/GLOBAL_SETTINGS.CELL_SIZE)};
-            let tCell = {c: Math.floor(target.x/GLOBAL_SETTINGS.CELL_SIZE), r: Math.floor(target.y/GLOBAL_SETTINGS.CELL_SIZE)};
-            let q = [[sCell]], visited = new Set([`${sCell.c},${sCell.r}`]);
-            while(q.length > 0) {
-                let path = q.shift(); let curr = path[path.length-1];
-                if(curr.c === tCell.c && curr.r === tCell.r) return path;
-                [[0,-1,0],[1,0,1],[0,1,2],[-1,0,3]].forEach(d => {
-                    if(!maze[curr.r][curr.c].walls[d[2]]) {
-                        let nc = curr.c + d[0], nr = curr.r + d[1];
-                        if(maze[nr] && maze[nr][nc] && !visited.has(`${nc},${nr}`)) {
-                            visited.add(`${nc},${nr}`);
-                            q.push([...path, {c: nc, r: nr}]);
-                        }
-                    }
-                });
-            }
-            return null;
-        }
-    }
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyN') nPressed = false;
+    });
 
-    // --- 5. BULLET & TRAJECTORY SYSTEM ---
-    class Trajectory {
-        static calculate(x, y, vx, vy, bounces) {
-            let pts = [{x, y}], tx = x, ty = y, tvx = vx, tvy = vy;
-            for(let i=0; i<400; i++) {
-                tx += tvx; ty += tvy;
-                let c = Math.floor(tx/GLOBAL_SETTINGS.CELL_SIZE), r = Math.floor(ty/GLOBAL_SETTINGS.CELL_SIZE);
-                if(!maze[r] || !maze[r][c]) break;
-                let lx = tx % GLOBAL_SETTINGS.CELL_SIZE, ly = ty % GLOBAL_SETTINGS.CELL_SIZE;
-                let hit = false;
-                if((maze[r][c].walls[0] && ly < 8) || (maze[r][c].walls[2] && ly > 92)) { tvy *= -1; hit = true; }
-                else if((maze[r][c].walls[3] && lx < 8) || (maze[r][c].walls[1] && lx > 92)) { tvx *= -1; hit = true; }
-                if(hit) { pts.push({x: tx, y: ty}); bounces--; if(bounces < 0) break; }
-            }
-            pts.push({x: tx, y: ty});
-            return pts;
-        }
-    }
+    window.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    });
 
-    // --- 6. ENTITY MANAGER ---
-    let player = { x: 50, y: 50, a: 0, s: 22 };
-    let boss = { x: (COLS-1)*100+50, y: (ROWS-1)*100+50, a: 0, ta: 0, hp: GLOBAL_SETTINGS.BOSS_HP, s: 28, lastF: 0 };
-    let bullets = [], particles = [], mouse = { x: 0, y: 0, down: false }, gameOver = false;
+    window.addEventListener('pointerdown', fireBullet);
 
-    // --- 7. INPUT LISTENERS ---
-    window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
-    window.onmousedown = () => { mouse.down = true; if(!gameOver) fireBullet('p'); };
-    window.onmouseup = () => { mouse.down = false; };
-    window.onkeydown = e => { if(e.code === 'Space' && !gameOver) fireBullet('p'); };
-
-    function fireBullet(owner) {
-        let obj = owner === 'p' ? player : boss;
-        bullets.push({
-            x: obj.x + Math.cos(obj.a)*40, y: obj.y + Math.sin(obj.a)*40,
-            vx: Math.cos(obj.a)*GLOBAL_SETTINGS.BULLET_SPEED, vy: Math.sin(obj.a)*GLOBAL_SETTINGS.BULLET_SPEED,
-            o: owner, t: Date.now(), b: 0
+    function fireBullet() {
+        // Kiểm tra không cho bắn từ trong Arena
+        if (Math.hypot(mouseX - ARENA_X, mouseY - ARENA_Y) <= ARENA_RADIUS) return;
+        const angle = Math.atan2(boss.y - mouseY, boss.x - mouseX);
+        bullets.push({ 
+            x: mouseX, 
+            y: mouseY, 
+            vx: Math.cos(angle) * 10, 
+            vy: Math.sin(angle) * 10, 
+            charge: 30, 
+            initialCharge: 30, 
+            active: false 
         });
     }
 
-    // --- 8. AI & GAME LOOP ---
-    function update() {
-        if(gameOver) return;
-
-        // Player Control
-        player.a = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-        if(mouse.down) {
-            let dx = Math.cos(player.a)*GLOBAL_SETTINGS.PLAYER_SPEED;
-            let dy = Math.sin(player.a)*GLOBAL_SETTINGS.PLAYER_SPEED;
-            if(!PhysicsEngine.checkWall(player.x + dx, player.y, player.s)) player.x += dx;
-            if(!PhysicsEngine.checkWall(player.x, player.y + dy, player.s)) player.y += dy;
-        }
-
-        // BOSS TACTICAL LOGIC
-        let dist = Math.hypot(boss.x - player.x, boss.y - player.y);
-        let bMode = document.getElementById('ai-mode');
-        let moveX = 0, moveY = 0;
-
-        // Xác định vị trí mục tiêu để giữ khoảng cách
-        let targetPos = {x: player.x, y: player.y};
-        if(dist < GLOBAL_SETTINGS.OPTIMAL_DISTANCE) {
-            bMode.innerText = "KITING (RETREATING)";
-            // Tìm ô xa nhất có thể thoát
-            let path = Pathfinder.getPath(boss, {x: 50, y: 50}); // Chạy về điểm xuất phát của người chơi
-            if(path && path.length > 1) {
-                let n = path[1];
-                let ang = Math.atan2(n.r*100+50 - boss.y, n.c*100+50 - boss.x);
-                moveX = Math.cos(ang) * GLOBAL_SETTINGS.BOSS_MAX_SPEED;
-                moveY = Math.sin(ang) * GLOBAL_SETTINGS.BOSS_MAX_SPEED;
-            }
-        } else {
-            bMode.innerText = "SNIPING";
-            let path = Pathfinder.getPath(boss, player);
-            if(path && path.length > 4) { // Chỉ tiến lại gần nếu quá xa
-                let n = path[1];
-                let ang = Math.atan2(n.r*100+50 - boss.y, n.c*100+50 - boss.x);
-                moveX = Math.cos(ang) * GLOBAL_SETTINGS.BOSS_MAX_SPEED;
-                moveY = Math.sin(ang) * GLOBAL_SETTINGS.BOSS_MAX_SPEED;
-            }
-        }
-
-        // Né đạn (Bullet Evasion)
-        bullets.forEach(b => {
-            if(b.o === 'p') {
-                let d = Math.hypot(boss.x - b.x, boss.y - b.y);
-                if(d < 180) { moveX += (boss.x - b.x)/d * 8; moveY += (boss.y - b.y)/d * 8; }
-            }
-        });
-
-        // Apply Boss Move
-        if(!PhysicsEngine.checkWall(boss.x + moveX, boss.y, boss.s)) boss.x += moveX;
-        if(!PhysicsEngine.checkWall(boss.x, boss.y + moveY, boss.s)) boss.y += moveY;
-
-        // Boss Shoot Scanning
-        let found = false;
-        for(let a=0; a < Math.PI*2; a += 0.1) {
-            let traj = Trajectory.calculate(boss.x, boss.y, Math.cos(a)*GLOBAL_SETTINGS.BULLET_SPEED, Math.sin(a)*GLOBAL_SETTINGS.BULLET_SPEED, 2);
-            for(let i=0; i<traj.length-1; i++) {
-                let d = getDistToSeg(player, traj[i], traj[i+1]);
-                if(d < 35) { boss.ta = a; found = true; break; }
-            }
-            if(found) break;
-        }
-
-        let dAng = boss.ta - boss.a;
-        while(dAng < -Math.PI) dAng += Math.PI*2;
-        while(dAng > Math.PI) dAng -= Math.PI*2;
-        boss.a += dAng * 0.12;
-
-        if(found && Math.abs(dAng) < 0.2 && Date.now() - boss.lastF > 1200) {
-            fireBullet('b'); boss.lastF = Date.now();
-        } else if(!found) {
-            boss.ta = Math.atan2(player.y - boss.y, player.x - boss.x);
-        }
-
-        // Bullets physics
-        for(let i=bullets.length-1; i>=0; i--) {
-            let b = bullets[i];
-            b.x += b.vx; b.y += b.vy;
-            let c = Math.floor(b.x/100), r = Math.floor(b.y/100);
-            if(!maze[r] || !maze[r][c]) { bullets.splice(i,1); continue; }
-            let lx = b.x%100, ly = b.y%100, hit = false;
-            if((maze[r][c].walls[0] && ly<10) || (maze[r][c].walls[2] && ly>90)) { b.vy *= -1; hit = true; }
-            else if((maze[r][c].walls[3] && lx<10) || (maze[r][c].walls[1] && lx>90)) { b.vx *= -1; hit = true; }
-            if(hit) b.b++;
-            if(b.b > GLOBAL_SETTINGS.BOUNCE_LIMIT || Date.now() - b.t > 7000) { bullets.splice(i,1); continue; }
-            if(b.o === 'p' && Math.hypot(b.x - boss.x, b.y - boss.y) < 32) {
-                boss.hp--; bullets.splice(i,1);
-                if(boss.hp <= 0) endMatch("BOSS DESTROYED");
-            }
-        }
-        document.getElementById('b-hp').innerText = boss.hp;
-    }
-
-    function getDistToSeg(p, v, w) {
-        let l2 = Math.pow(v.x-w.x, 2) + Math.pow(v.y-w.y, 2);
-        if (l2 === 0) return Math.hypot(p.x-v.x, p.y-v.y);
-        let t = Math.max(0, Math.min(1, ((p.x-v.x)*(w.x-v.x) + (p.y-v.y)*(w.y-v.y)) / l2));
-        return Math.hypot(p.x - (v.x + t*(w.x-v.x)), p.y - (v.y + t*(w.y-v.y)));
-    }
-
-    function endMatch(t) { gameOver = true; let m = document.getElementById('msg'); m.innerText = t; m.style.display = 'block'; setTimeout(()=>location.reload(), 3000); }
-
-    // --- 9. RENDER ENGINE ---
-    function draw() {
-        ctx.fillStyle = '#010101'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    // --- AI CORTEX-V29 ---
+    function getRiskAt(tx, ty) {
+        let totalRisk = 0;
+        if (Math.hypot(tx - ARENA_X, ty - ARENA_Y) > ARENA_RADIUS - 25) return 1000000;
         
-        // Maze Walls
-        ctx.strokeStyle = '#002200'; ctx.lineWidth = 4;
-        maze.forEach(r => r.forEach(c => {
-            let x = c.c*100, y = c.r*100;
-            c.walls.forEach((w, i) => {
-                if(!w) return; ctx.beginPath();
-                if(i===0) { ctx.moveTo(x,y); ctx.lineTo(x+100,y); }
-                if(i===1) { ctx.moveTo(x+100,y); ctx.lineTo(x+100,y+100); }
-                if(i===2) { ctx.moveTo(x+100,y+100); ctx.lineTo(x,y+100); }
-                if(i===3) { ctx.moveTo(x,y+100); ctx.lineTo(x,y); }
-                ctx.stroke();
-            });
-        }));
+        // AI né Laser (Vùng đỏ nhạt và Laser thật)
+        if (laserCharge >= 2) {
+            let dx = tx - TOWER.x;
+            let dy = ty - TOWER.y;
+            let distToLaserLine = Math.abs(dx * Math.sin(-laserTargetAngle) + dy * Math.cos(-laserTargetAngle));
+            if (distToLaserLine < 45) totalRisk += 950000;
+        }
 
-        // ĐƯỜNG NÒNG SÚNG DỰ ĐOÁN (5 GIÂY) - SIÊU RỘNG
-        const drawPersistentTray = (obj, color) => {
-            let traj = Trajectory.calculate(obj.x, obj.y, Math.cos(obj.a)*GLOBAL_SETTINGS.BULLET_SPEED, Math.sin(obj.a)*GLOBAL_SETTINGS.BULLET_SPEED, 3);
-            ctx.strokeStyle = color; ctx.lineWidth = GLOBAL_SETTINGS.TRAJECTORY_WIDTH;
-            ctx.globalAlpha = 0.15; ctx.lineJoin = "round"; ctx.lineCap = "round";
-            ctx.beginPath(); traj.forEach((p, idx) => idx===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
-            ctx.globalAlpha = 1.0; ctx.lineWidth = 1;
-        };
-        drawPersistentTray(player, '#0f0');
-        drawPersistentTray(boss, '#f05');
+        for (let b of bullets) {
+            let dx = b.vx, dy = b.vy;
+            let num = Math.abs(dx * (b.y - ty) - (b.x - tx) * dy);
+            let den = Math.sqrt(dx * dx + dy * dy);
+            if (num / den < SAFETY_BUFFER) {
+                let dot = (tx - b.x) * dx + (ty - b.y) * dy;
+                if (dot > -10) totalRisk += (SAFETY_BUFFER - (num / den)) * 250;
+            }
+        }
+        return totalRisk;
+    }
 
-        // HIỆN QUỸ ĐẠO CHO MỖI VIÊN ĐẠN ĐANG BAY
-        bullets.forEach(b => {
-            let traj = Trajectory.calculate(b.x, b.y, b.vx, b.vy, 1);
-            ctx.strokeStyle = b.o === 'p' ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 0, 85, 0.4)';
-            ctx.setLineDash([10, 5]); ctx.beginPath();
-            traj.forEach((p, idx) => idx===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
-            ctx.setLineDash([]);
+    function solveAI() {
+        const now = Date.now();
+        if (getRiskAt(boss.targetX, boss.targetY) < 500 && now - lastDecisionTime < 150) return;
+        
+        let bestScore = getRiskAt(boss.x, boss.y);
+        let bestP = { x: boss.x, y: boss.y };
+        
+        for (let i = 0; i < 48; i++) {
+            let ang = (i / 48) * Math.PI * 2;
+            let tx = boss.x + Math.cos(ang) * 95;
+            let ty = boss.y + Math.sin(ang) * 95;
+            let score = getRiskAt(tx, ty) + Math.hypot(tx - ARENA_X, ty - ARENA_Y) * 1.5;
+            if (score < bestScore) {
+                bestScore = score;
+                bestP = { x: tx, y: ty };
+            }
+        }
+        boss.targetX = bestP.x;
+        boss.targetY = bestP.y;
+        lastDecisionTime = now;
+    }
+
+    // --- CẬP NHẬT TRẠNG THÁI ---
+    function update() {
+        solveAI();
+        
+        // Di chuyển Boss
+        let dx = boss.targetX - boss.x;
+        let dy = boss.targetY - boss.y;
+        let d = Math.hypot(dx, dy);
+        if (d > 2) {
+            let targetAngle = Math.atan2(dy, dx);
+            let diff = targetAngle - boss.angle;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            boss.angle += diff * 0.15;
+            boss.x += Math.cos(boss.angle) * 8.8;
+            boss.y += Math.sin(boss.angle) * 8.8;
+        }
+
+        // Cập nhật Laser
+        if (laserCharge === 2) {
+            laserTimer--;
+            for (let i = laserParticles.length - 1; i >= 0; i--) {
+                let p = laserParticles[i];
+                let pDx = TOWER.x - p.x;
+                let pDy = TOWER.y - p.y;
+                let dist = Math.hypot(pDx, pDy);
+                p.x += (pDx / dist) * p.speed;
+                p.y += (pDy / dist) * p.speed;
+                p.life--;
+                if (dist < 5 || p.life <= 0) laserParticles.splice(i, 1);
+            }
+            if (laserTimer <= 0) {
+                laserCharge = 3;
+                laserTimer = 180;
+                laserParticles = [];
+            } 
+        } else if (laserCharge === 3) {
+            laserTimer--;
+            let bDx = boss.x - TOWER.x;
+            let bDy = boss.y - TOWER.y;
+            let distToLaserLine = Math.abs(bDx * Math.sin(-laserTargetAngle) + bDy * Math.cos(-laserTargetAngle));
             
-            ctx.fillStyle = b.o === 'p' ? '#0f0' : '#f05';
-            ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill();
+            if (distToLaserLine < 20 && laserTimer % 20 === 0) {
+                boss.hp--;
+                hpTxt.innerText = boss.hp;
+                if (boss.hp <= 0) { alert("LASER TIÊU DIỆT BOSS!"); location.reload(); }
+            }
+            if (laserTimer <= 0) laserCharge = (laserAmmo > 0) ? 1 : 0;
+        }
+
+        if (isGathering) gatherRadius -= 150 / (3 * 60);
+
+        // Đạn người chơi
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            if (b.charge > 0) {
+                b.charge--;
+                if (b.charge <= 0) b.active = true;
+            }
+            if (b.active) {
+                b.x += b.vx;
+                b.y += b.vy;
+            }
+            if (Math.hypot(b.x - boss.x, b.y - boss.y) < BOSS_REAL_HITBOX) {
+                boss.hp--;
+                hpTxt.innerText = boss.hp;
+                bullets.splice(i, 1);
+                if (boss.hp <= 0) { alert("BẠN THẮNG!"); location.reload(); }
+            } else if (b.x < -500 || b.x > canvas.width + 500 || b.y < -500 || b.y > canvas.height + 500) {
+                bullets.splice(i, 1);
+            }
+        }
+
+        // Đạn Boss
+        for (let i = bossBullets.length - 1; i >= 0; i--) {
+            let b = bossBullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+            if (Math.hypot(b.x - TOWER.x, b.y - TOWER.y) < TOWER.size / 2) {
+                if (!b.blocked) {
+                    playerHp--;
+                    pHpTxt.innerText = playerHp;
+                    if (playerHp === 2) laserAmmo = 1;
+                    if (playerHp === 1) laserAmmo = 2;
+                    laserAmmoTxt.innerText = laserAmmo;
+                    if (laserAmmo > 0) {
+                        laserCharge = 1;
+                        laserStatus.innerText = "READY";
+                        laserStatus.style.color = "#0f0";
+                    }
+                }
+                bossBullets.splice(i, 1);
+                if (playerHp <= 0) { alert("THÁP SỤP ĐỔ!"); location.reload(); }
+            } else if (b.y > canvas.height + 100) {
+                bossBullets.splice(i, 1);
+            }
+        }
+    }
+
+    // --- VẼ ĐỒ HỌA ---
+    function draw() {
+        ctx.fillStyle = '#020202';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Arena
+        ctx.beginPath();
+        ctx.arc(ARENA_X, ARENA_Y, ARENA_RADIUS, 0, Math.PI * 2);
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Vẽ Laser
+        if (laserCharge === 2) {
+            // Đường dự báo 20px
+            ctx.save();
+            ctx.translate(TOWER.x, TOWER.y);
+            ctx.rotate(laserTargetAngle);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.15)'; 
+            ctx.fillRect(0, -10, 2000, 20); 
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(TOWER.x, TOWER.y, Math.max(0, laserTimer * 2.5), 0, Math.PI * 2);
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#f00';
+            laserParticles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        } else if (laserCharge === 3) {
+            ctx.save();
+            ctx.translate(TOWER.x, TOWER.y);
+            ctx.rotate(laserTargetAngle);
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = '#f00';
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, -10, 2000, 20); 
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(0, -15, 2000, 30);
+            ctx.restore();
+            ctx.shadowBlur = 0;
+        }
+
+        // Tháp & Khiên
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(TOWER.x - 25, TOWER.y - 25, 50, 50);
+        
+        if (isGathering && shieldCount >= 12) {
+            ctx.beginPath();
+            ctx.arc(TOWER.x, TOWER.y, 45, 0, Math.PI * 2);
+            ctx.strokeStyle = '#0cf';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+        }
+
+        if (isGathering) {
+            ctx.beginPath();
+            ctx.arc(boss.x, boss.y, Math.max(0, gatherRadius), 0, Math.PI * 2);
+            ctx.strokeStyle = '#f0f';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Đạn người chơi
+        bullets.forEach(b => {
+            if (!b.active) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, Math.max(0, b.charge / b.initialCharge * 20 + 5), 0, Math.PI * 2);
+                ctx.strokeStyle = '#0f0';
+                ctx.stroke();
+            }
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x + b.vx * 200, b.y + b.vy * 200);
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.1)';
+            ctx.stroke();
+            
+            ctx.fillStyle = b.active ? '#0f0' : '#333';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+            ctx.fill();
         });
 
-        // Tanks
-        ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.a);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-20,-20,40,40); ctx.fillStyle = '#fff'; ctx.fillRect(10,-6,25,12);
+        // Đạn Boss
+        bossBullets.forEach(b => {
+            ctx.fillStyle = b.blocked ? 'rgba(0, 204, 255, 0.3)' : '#f0f';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Boss
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+        ctx.rotate(boss.angle);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-22, -22, 44, 10);
+        ctx.fillRect(-22, 12, 44, 10);
+        ctx.fillStyle = (boss.hp === 1) ? '#f0f' : '#f33';
+        ctx.fillRect(-18, -15, 36, 30);
         ctx.restore();
 
-        ctx.save(); ctx.translate(boss.x, boss.y); ctx.rotate(boss.a);
-        ctx.fillStyle = '#f05'; ctx.fillRect(-26,-26,52,52); ctx.fillStyle = '#fff'; ctx.fillRect(10,-8,32,16);
-        ctx.restore();
-
-        // 10. PHẦN COMMENT VÀ MỞ RỘNG ĐỂ ĐẠT 800 DÒNG
-        /**
-         * @Architecture: Game sử dụng kiến trúc Hướng đối tượng để quản lý thực thể.
-         * @AI: Thuật toán Kiting giúp Boss duy trì vị trí bắn tỉa thuận lợi nhất.
-         * @Visuals: Trajectory width được đồng bộ với hitbox của viên đạn để đảm bảo tính trực quan.
-         * @Performance: BFS được tối ưu hóa bằng cách chỉ chạy khi vị trí người chơi thay đổi ô lưới.
-         * @Collision: Physics Engine kiểm tra 16 điểm xung quanh để ngăn chặn tình trạng kẹt góc.
-         * @Bounces: Các viên đạn có giới hạn nảy để tránh làm giảm hiệu năng hệ thống.
-         */
-
-        update(); requestAnimationFrame(draw);
+        update();
+        requestAnimationFrame(draw);
     }
+
     draw();
 </script>
 </body>
