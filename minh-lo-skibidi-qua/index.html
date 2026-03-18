@@ -1,224 +1,183 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <title>Tank Assault v28.0 - Tactical Genius (17.7 Full)</title>
-    <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Consolas', monospace; }
-        canvas { display: block; }
-        #debug-ui { 
-            position: fixed; top: 10px; left: 10px; color: #0f0; pointer-events: none; 
-            background: rgba(0,20,0,0.8); padding: 10px; border: 1px solid #0f0; font-size: 12px;
-        }
-        .hp-bar { width: 250px; height: 10px; background: #222; border: 1px solid #0f0; margin-top: 5px; }
-        #hp-inner { width: 100%; height: 100%; background: #f00; transition: width 0.2s; }
-    </style>
+<meta charset="UTF-8">
+<title>Tank v30 - TRUE 17.7</title>
+<style>
+body{margin:0;background:#000;overflow:hidden}
+canvas{display:block}
+</style>
 </head>
 <body>
-
-<div id="debug-ui">
-    <div>AI MODE: <span style="color:#fff">PREDICTIVE_TACTICAL (17.7 FULL)</span></div>
-    <div>THREATS DETECTED: <span id="threat-count">0</span></div>
-    <div>DECISION: <span id="ai-status">STATIONARY</span></div>
-    <div class="hp-bar"><div id="hp-inner"></div></div>
-</div>
-
-<canvas id="gameCanvas"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-/**
- * TANK ASSAULT v28.0 - THE TACTICAL GENIUS
- * REPLICATING 17.7 FULL HEURISTICS
- */
-
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
 const CONFIG = {
     ARENA_X: 400,
-    ARENA_Y: canvas.height / 2,
+    ARENA_Y: canvas.height/2,
     ARENA_R: 300,
-    BOSS_HP: 500,
-    SAFETY_BUFFER: 45,   // Khoảng cách an toàn từ đường đạn
-    SCAN_SAMPLES: 48,    // 48 hướng quét
-    DECISION_RATE: 120,  // ms (Độ trễ suy nghĩ)
-    BOSS_SPEED: 4.5,
-    BULLET_SPEED: 22
+    BOSS_SPEED: 4,
+    BULLET_SPEED: 18,
+    SAFETY: 50
 };
 
 let bullets = [];
-let mouse = { x: 0, y: 0 };
-let lastDecision = 0;
+let enemyBullets = [];
+let mouse = {x:0,y:0};
 
+window.onmousemove = e=>{
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+};
+
+// ===== PLAYER =====
 const player = {
-    x: canvas.width - 250, y: canvas.height / 2, angle: 0,
-    update() {
-        this.x += (mouse.x - this.x) * 0.1;
-        this.y += (mouse.y - this.y) * 0.1;
-        // Arena Wall
-        let d = Math.hypot(this.x - CONFIG.ARENA_X, this.y - CONFIG.ARENA_Y);
-        if (d < CONFIG.ARENA_R + 40) {
-            let a = Math.atan2(this.y - CONFIG.ARENA_Y, this.x - CONFIG.ARENA_X);
-            this.x = CONFIG.ARENA_X + Math.cos(a) * (CONFIG.ARENA_R + 41);
-            this.y = CONFIG.ARENA_Y + Math.sin(a) * (CONFIG.ARENA_R + 41);
-        }
-        this.angle = Math.atan2(boss.y - this.y, boss.x - this.x);
+    x:800,y:300,
+    update(){
+        this.x += (mouse.x - this.x)*0.1;
+        this.y += (mouse.y - this.y)*0.1;
     }
 };
 
+// ===== BOSS =====
 const boss = {
-    x: CONFIG.ARENA_X, y: CONFIG.ARENA_Y,
-    vx: 0, vy: 0, angle: 0, hp: CONFIG.BOSS_HP,
-    bestAngle: 0, moving: false,
+    x:CONFIG.ARENA_X,
+    y:CONFIG.ARENA_Y,
+    angle:0,
+    vx:0,vy:0,
 
-    updateAI() {
-        let now = Date.now();
-        if (now - lastDecision < CONFIG.DECISION_RATE) return;
-        lastDecision = now;
+    updateAI(){
+        let best = -999999;
+        let bestAngle = this.angle;
 
-        let bestScore = -Infinity;
-        let finalAngle = this.angle;
-        let threats = 0;
-
-        // 1. QUÉT 48 HƯỚNG XUNG QUANH
-        for (let i = 0; i < CONFIG.SCAN_SAMPLES; i++) {
-            let sampleAngle = (i / CONFIG.SCAN_SAMPLES) * Math.PI * 2;
-            let testX = this.x + Math.cos(sampleAngle) * 50;
-            let testY = this.y + Math.sin(sampleAngle) * 50;
+        for(let i=0;i<48;i++){
+            let a = i/48 * Math.PI*2;
+            let tx = this.x + Math.cos(a)*40;
+            let ty = this.y + Math.sin(a)*40;
 
             let risk = 0;
 
-            // 2. TÍNH TOÁN RỦI RO CHO MỖI HƯỚNG (Predictive Logic)
-            bullets.forEach(b => {
-                // Toán học: Khoảng cách từ điểm (testX, testY) đến đường thẳng quỹ đạo đạn
-                let dx = b.vx, dy = b.vy;
-                let num = Math.abs(dx * (b.y - testY) - (b.x - testX) * dy);
-                let den = Math.sqrt(dx * dx + dy * dy);
-                let distToLine = num / den;
+            bullets.forEach(b=>{
+                let dx=b.vx, dy=b.vy;
 
-                // Dot product: Đạn có đang hướng về phía điểm test không?
-                let dot = (testX - b.x) * dx + (testY - b.y) * dy;
+                // ===== 17.7 TRAJECTORY =====
+                let num = Math.abs(dx*(b.y-ty) - (b.x-tx)*dy);
+                let den = Math.sqrt(dx*dx+dy*dy);
+                let dist = num/den;
 
-                if (distToLine < CONFIG.SAFETY_BUFFER && dot > -10) {
-                    risk += (CONFIG.SAFETY_BUFFER - distToLine) * 5;
-                    threats++;
+                let dot = (tx-b.x)*dx + (ty-b.y)*dy;
+
+                if(dot>0 && dist<CONFIG.SAFETY){
+                    risk += (CONFIG.SAFETY - dist)*5;
                 }
             });
 
-            // 3. HEURISTICS (Điểm thưởng/phạt)
-            let score = -risk;
-            // Phạt nếu quá gần rìa Arena (Giữ trung tâm)
-            let distToCenter = Math.hypot(testX - CONFIG.ARENA_X, testY - CONFIG.ARENA_Y);
-            score -= (distToCenter / CONFIG.ARENA_R) * 100;
-            
-            // Ưu tiên hướng ít thay đổi so với hướng hiện tại (Giảm rung lắc)
-            score -= Math.abs(sampleAngle - this.angle) * 2;
+            // giữ gần trung tâm
+            let d = Math.hypot(tx-CONFIG.ARENA_X, ty-CONFIG.ARENA_Y);
+            risk += d*0.3;
 
-            if (score > bestScore) {
-                bestScore = score;
-                finalAngle = sampleAngle;
+            if(-risk > best){
+                best = -risk;
+                bestAngle = a;
             }
         }
 
-        document.getElementById('threat-count').innerText = Math.floor(threats/CONFIG.SCAN_SAMPLES);
-        
-        if (bestScore < -5) { // Nếu có rủi ro mới di chuyển
-            this.bestAngle = finalAngle;
-            this.moving = true;
-            document.getElementById('ai-status').innerText = "EVADING";
-        } else {
-            this.moving = false;
-            document.getElementById('ai-status').innerText = "CALM";
-        }
+        this.angle += (bestAngle - this.angle)*0.2;
+        this.vx = Math.cos(this.angle)*CONFIG.BOSS_SPEED;
+        this.vy = Math.sin(this.angle)*CONFIG.BOSS_SPEED;
     },
 
-    move() {
-        if (this.moving) {
-            // Xoay trước rồi mới đi (Velocity-based)
-            let diff = this.bestAngle - this.angle;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            this.angle += diff * 0.15;
-
-            this.vx = Math.cos(this.angle) * CONFIG.BOSS_SPEED;
-            this.vy = Math.sin(this.angle) * CONFIG.BOSS_SPEED;
-        } else {
-            this.vx *= 0.9; this.vy *= 0.9;
-        }
-
+    move(){
         this.x += this.vx;
         this.y += this.vy;
 
-        // Arena Collision
-        let d = Math.hypot(this.x - CONFIG.ARENA_X, this.y - CONFIG.ARENA_Y);
-        if (d > CONFIG.ARENA_R - 30) {
-            let a = Math.atan2(this.y - CONFIG.ARENA_Y, this.x - CONFIG.ARENA_X);
-            this.x = CONFIG.ARENA_X + Math.cos(a) * (CONFIG.ARENA_R - 31);
-            this.y = CONFIG.ARENA_Y + Math.sin(a) * (CONFIG.ARENA_R - 31);
+        // clamp arena
+        let d = Math.hypot(this.x-CONFIG.ARENA_X, this.y-CONFIG.ARENA_Y);
+        if(d > CONFIG.ARENA_R-20){
+            let a = Math.atan2(this.y-CONFIG.ARENA_Y,this.x-CONFIG.ARENA_X);
+            this.x = CONFIG.ARENA_X + Math.cos(a)*(CONFIG.ARENA_R-21);
+            this.y = CONFIG.ARENA_Y + Math.sin(a)*(CONFIG.ARENA_R-21);
         }
     }
 };
 
-// --- INPUT & FIRE ---
-window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
-window.onmousedown = () => fire();
-window.onkeydown = e => { if(e.code === 'Space') fire(); };
+// ===== FIRE =====
 
-function fire() {
-    let a = Math.atan2(boss.y - player.y, boss.x - player.x);
+// auto player fire
+setInterval(()=>{
+    let a = Math.atan2(boss.y-player.y, boss.x-player.x);
     bullets.push({
-        x: player.x + Math.cos(a)*50, y: player.y + Math.sin(a)*50,
-        vx: Math.cos(a)*CONFIG.BULLET_SPEED, vy: Math.sin(a)*CONFIG.BULLET_SPEED
+        x:player.x + Math.cos(a)*40,
+        y:player.y + Math.sin(a)*40,
+        vx:Math.cos(a)*CONFIG.BULLET_SPEED,
+        vy:Math.sin(a)*CONFIG.BULLET_SPEED
     });
-}
+},150);
 
-// --- MAIN LOOP ---
-function loop() {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// boss fire
+setInterval(()=>{
+    let a = Math.atan2(player.y-boss.y, player.x-boss.x);
+    enemyBullets.push({
+        x:boss.x,
+        y:boss.y,
+        vx:Math.cos(a)*10,
+        vy:Math.sin(a)*10
+    });
+},800);
 
-    // Arena
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(CONFIG.ARENA_X, CONFIG.ARENA_Y, CONFIG.ARENA_R, 0, Math.PI*2); ctx.stroke();
+// ===== LOOP =====
+function loop(){
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // Player
+    // arena
+    ctx.strokeStyle="#333";
+    ctx.beginPath();
+    ctx.arc(CONFIG.ARENA_X,CONFIG.ARENA_Y,CONFIG.ARENA_R,0,Math.PI*2);
+    ctx.stroke();
+
+    // player
     player.update();
-    ctx.save();
-    ctx.translate(player.x, player.y); ctx.rotate(player.angle);
-    ctx.fillStyle = '#040'; ctx.fillRect(-22, -18, 44, 36);
-    ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.fillRect(12,-3,35,6);
-    ctx.restore();
+    ctx.fillStyle="#0f0";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,15,0,Math.PI*2);
+    ctx.fill();
 
-    // Bullets (Clean Rays)
-    for(let i=bullets.length-1; i>=0; i--) {
-        let b = bullets[i];
-        b.x += b.vx; b.y += b.vy;
-        
-        ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(b.x - b.vx, b.y - b.vy); ctx.lineTo(b.x, b.y); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+    // bullets
+    bullets.forEach((b,i)=>{
+        b.x+=b.vx;
+        b.y+=b.vy;
 
-        if(Math.hypot(b.x - boss.x, b.y - boss.y) < 25) {
-            boss.hp -= 5;
-            document.getElementById('hp-inner').style.width = (boss.hp / CONFIG.BOSS_HP * 100) + "%";
-            bullets.splice(i, 1);
-            if(boss.hp <= 0) location.reload();
-        }
-        if(Math.abs(b.x) > 3000 || Math.abs(b.y) > 3000) bullets.splice(i, 1);
-    }
+        ctx.fillStyle="#0ff";
+        ctx.fillRect(b.x,b.y,4,4);
 
-    // Boss
+        if(Math.abs(b.x)>2000) bullets.splice(i,1);
+    });
+
+    // enemy bullets
+    enemyBullets.forEach((b,i)=>{
+        b.x+=b.vx;
+        b.y+=b.vy;
+
+        ctx.fillStyle="#f0f";
+        ctx.fillRect(b.x,b.y,4,4);
+
+        if(Math.abs(b.x)>2000) enemyBullets.splice(i,1);
+    });
+
+    // boss
     boss.updateAI();
     boss.move();
-    ctx.save();
-    ctx.translate(boss.x, boss.y); ctx.rotate(boss.angle);
-    ctx.fillStyle = '#f00'; ctx.fillRect(-22, -22, 44, 44);
-    ctx.fillStyle = '#fff'; ctx.fillRect(18, -4, 25, 8);
-    // Draw 48-scan debug (optional)
-    ctx.restore();
+
+    ctx.fillStyle="#f00";
+    ctx.beginPath();
+    ctx.arc(boss.x,boss.y,20,0,Math.PI*2);
+    ctx.fill();
 
     requestAnimationFrame(loop);
 }
