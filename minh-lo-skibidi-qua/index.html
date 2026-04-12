@@ -1,188 +1,101 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="UTF-8">
-<title>Tank v30 - TRUE 17.7</title>
-<style>
-body{margin:0;background:#000;overflow:hidden}
-canvas{display:block}
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
+import turtle
 
-<script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+t = turtle.Turtle()
+t.speed(3)
 
-const CONFIG = {
-    ARENA_X: 400,
-    ARENA_Y: canvas.height/2,
-    ARENA_R: 300,
-    BOSS_SPEED: 4,
-    BULLET_SPEED: 18,
-    SAFETY: 50
-};
+# ====== ĐẦU ======
+def draw_head():
+    t.penup()
+    t.goto(0, 100)
+    t.pendown()
+    t.circle(40)
 
-let bullets = [];
-let enemyBullets = [];
-let mouse = {x:0,y:0};
+# ====== MẮT ======
+def draw_eyes():
+    # mắt trái
+    t.penup()
+    t.goto(-15, 130)
+    t.pendown()
+    t.dot(8)
 
-window.onmousemove = e=>{
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-};
+    # mắt phải
+    t.penup()
+    t.goto(15, 130)
+    t.pendown()
+    t.dot(8)
 
-// ===== PLAYER =====
-const player = {
-    x:800,y:300,
-    update(){
-        this.x += (mouse.x - this.x)*0.1;
-        this.y += (mouse.y - this.y)*0.1;
-    }
-};
+# ====== MIỆNG ======
+def draw_mouth():
+    t.penup()
+    t.goto(-10, 110)
+    t.setheading(-60)
+    t.pendown()
+    t.circle(20, 120)
 
-// ===== BOSS =====
-const boss = {
-    x:CONFIG.ARENA_X,
-    y:CONFIG.ARENA_Y,
-    angle:0,
-    vx:0,vy:0,
+# ====== TÓC ======
+def draw_hair():
+    t.penup()
+    t.goto(-40, 140)
+    t.pendown()
+    t.setheading(0)
+    t.forward(80)
+    t.right(90)
+    t.forward(20)
+    t.right(90)
+    t.forward(80)
 
-    updateAI(){
-        let best = -999999;
-        let bestAngle = this.angle;
+# ====== THÂN ======
+def draw_body():
+    t.penup()
+    t.goto(0, 100)
+    t.setheading(-90)
+    t.pendown()
+    t.forward(120)
 
-        for(let i=0;i<48;i++){
-            let a = i/48 * Math.PI*2;
-            let tx = this.x + Math.cos(a)*40;
-            let ty = this.y + Math.sin(a)*40;
+# ====== TAY ======
+def draw_arms():
+    t.penup()
+    t.goto(0, 60)
+    t.pendown()
+    
+    # tay trái
+    t.setheading(210)
+    t.forward(60)
+    
+    # quay lại
+    t.penup()
+    t.goto(0, 60)
+    t.pendown()
+    
+    # tay phải
+    t.setheading(-30)
+    t.forward(60)
 
-            let risk = 0;
+# ====== CHÂN ======
+def draw_legs():
+    t.penup()
+    t.goto(0, -20)
+    t.pendown()
+    
+    # chân trái
+    t.setheading(240)
+    t.forward(80)
+    
+    t.penup()
+    t.goto(0, -20)
+    t.pendown()
+    
+    # chân phải
+    t.setheading(-60)
+    t.forward(80)
 
-            bullets.forEach(b=>{
-                let dx=b.vx, dy=b.vy;
+# ====== VẼ ======
+draw_head()
+draw_eyes()
+draw_mouth()
+draw_hair()
+draw_body()
+draw_arms()
+draw_legs()
 
-                // ===== 17.7 TRAJECTORY =====
-                let num = Math.abs(dx*(b.y-ty) - (b.x-tx)*dy);
-                let den = Math.sqrt(dx*dx+dy*dy);
-                let dist = num/den;
-
-                let dot = (tx-b.x)*dx + (ty-b.y)*dy;
-
-                if(dot>0 && dist<CONFIG.SAFETY){
-                    risk += (CONFIG.SAFETY - dist)*5;
-                }
-            });
-
-            // giữ gần trung tâm
-            let d = Math.hypot(tx-CONFIG.ARENA_X, ty-CONFIG.ARENA_Y);
-            risk += d*0.3;
-
-            if(-risk > best){
-                best = -risk;
-                bestAngle = a;
-            }
-        }
-
-        this.angle += (bestAngle - this.angle)*0.2;
-        this.vx = Math.cos(this.angle)*CONFIG.BOSS_SPEED;
-        this.vy = Math.sin(this.angle)*CONFIG.BOSS_SPEED;
-    },
-
-    move(){
-        this.x += this.vx;
-        this.y += this.vy;
-
-        // clamp arena
-        let d = Math.hypot(this.x-CONFIG.ARENA_X, this.y-CONFIG.ARENA_Y);
-        if(d > CONFIG.ARENA_R-20){
-            let a = Math.atan2(this.y-CONFIG.ARENA_Y,this.x-CONFIG.ARENA_X);
-            this.x = CONFIG.ARENA_X + Math.cos(a)*(CONFIG.ARENA_R-21);
-            this.y = CONFIG.ARENA_Y + Math.sin(a)*(CONFIG.ARENA_R-21);
-        }
-    }
-};
-
-// ===== FIRE =====
-
-// auto player fire
-setInterval(()=>{
-    let a = Math.atan2(boss.y-player.y, boss.x-player.x);
-    bullets.push({
-        x:player.x + Math.cos(a)*40,
-        y:player.y + Math.sin(a)*40,
-        vx:Math.cos(a)*CONFIG.BULLET_SPEED,
-        vy:Math.sin(a)*CONFIG.BULLET_SPEED
-    });
-},150);
-
-// boss fire
-setInterval(()=>{
-    let a = Math.atan2(player.y-boss.y, player.x-boss.x);
-    enemyBullets.push({
-        x:boss.x,
-        y:boss.y,
-        vx:Math.cos(a)*10,
-        vy:Math.sin(a)*10
-    });
-},800);
-
-// ===== LOOP =====
-function loop(){
-    ctx.fillStyle="#000";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // arena
-    ctx.strokeStyle="#333";
-    ctx.beginPath();
-    ctx.arc(CONFIG.ARENA_X,CONFIG.ARENA_Y,CONFIG.ARENA_R,0,Math.PI*2);
-    ctx.stroke();
-
-    // player
-    player.update();
-    ctx.fillStyle="#0f0";
-    ctx.beginPath();
-    ctx.arc(player.x,player.y,15,0,Math.PI*2);
-    ctx.fill();
-
-    // bullets
-    bullets.forEach((b,i)=>{
-        b.x+=b.vx;
-        b.y+=b.vy;
-
-        ctx.fillStyle="#0ff";
-        ctx.fillRect(b.x,b.y,4,4);
-
-        if(Math.abs(b.x)>2000) bullets.splice(i,1);
-    });
-
-    // enemy bullets
-    enemyBullets.forEach((b,i)=>{
-        b.x+=b.vx;
-        b.y+=b.vy;
-
-        ctx.fillStyle="#f0f";
-        ctx.fillRect(b.x,b.y,4,4);
-
-        if(Math.abs(b.x)>2000) enemyBullets.splice(i,1);
-    });
-
-    // boss
-    boss.updateAI();
-    boss.move();
-
-    ctx.fillStyle="#f00";
-    ctx.beginPath();
-    ctx.arc(boss.x,boss.y,20,0,Math.PI*2);
-    ctx.fill();
-
-    requestAnimationFrame(loop);
-}
-
-loop();
-</script>
-</body>
-</html>
+turtle.done()
